@@ -1,0 +1,13 @@
+{
+  "appId": "my.utm.eventora",
+  "appName": "EventOra",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}

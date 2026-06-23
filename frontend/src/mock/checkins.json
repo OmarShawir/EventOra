@@ -1,0 +1,20 @@
+[
+  {
+    "id": "ci1",
+    "ticketId": "t3",
+    "attendeeName": "Lim Wei Xian",
+    "checkedInAt": "2025-11-15 08:52 AM"
+  },
+  {
+    "id": "ci2",
+    "ticketId": "t4",
+    "attendeeName": "Priya Nair",
+    "checkedInAt": "2025-11-15 09:01 AM"
+  },
+  {
+    "id": "ci3",
+    "ticketId": "t5",
+    "attendeeName": "Muhammad Irfan",
+    "checkedInAt": "2025-11-15 09:14 AM"
+  }
+]
