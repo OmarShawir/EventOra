@@ -5,7 +5,7 @@ import { useAuthStore } from "@/stores/auth";
 import Navbar from "@/components/common/Navbar.vue";
 import Footer from "@/components/common/Footer.vue";
 import AuthModal from "@/components/auth/AuthModal.vue";
-import DevRoleSwitcher from "@/components/common/DevRoleSwitcher.vue";
+
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -66,6 +66,5 @@ function handleAuthSuccess(u) {
 
     <!-- Dev-only helper: lets the team preview every role's screens during
          testing/demo without re-authenticating. Remove before final build. -->
-    <DevRoleSwitcher />
   </div>
 </template>
