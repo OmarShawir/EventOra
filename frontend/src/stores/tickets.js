@@ -1,8 +1,6 @@
 import { defineStore } from "pinia";
 import { useEventsStore } from "./events";
 import { useAuthStore } from "./auth";
-import { registerForEvent, checkInRequest } from "@/api/tickets";
-import mockCheckins from "@/mock/checkins.json";
 
 // Mirrors the TICKET + CHECKIN entities from the ER diagram.
 // Ticket.status: confirmed | checked_in | cancelled | waitlisted
@@ -17,13 +15,19 @@ function makeQR(eventId, userId) {
     .toUpperCase()}`;
 }
 
+// Seed check-ins matching the original prototype's MOCK_CHECKINS, useful
+// for the Organiser Dashboard's "recent scans" preview before real tickets
+// have been issued in this session.
+const MOCK_CHECKINS = [
+  { id: "ci1", ticketId: "t3", attendeeName: "Lim Wei Xian", checkedInAt: "2025-11-15 08:52 AM" },
+  { id: "ci2", ticketId: "t4", attendeeName: "Priya Nair", checkedInAt: "2025-11-15 09:01 AM" },
+  { id: "ci3", ticketId: "t5", attendeeName: "Muhammad Irfan", checkedInAt: "2025-11-15 09:14 AM" },
+];
+
 export const useTicketsStore = defineStore("tickets", {
   state: () => ({
     tickets: [],
-    // Seed check-ins matching the original prototype's mock data, useful
-    // for the Organiser Dashboard's "recent scans" preview before real
-    // tickets have been issued in this session.
-    checkins: [...mockCheckins],
+    checkins: [...MOCK_CHECKINS],
   }),
 
   getters: {
@@ -43,7 +47,7 @@ export const useTicketsStore = defineStore("tickets", {
   },
 
   actions: {
-    async registerFree(eventId) {
+    registerFree(eventId) {
       const auth = useAuthStore();
       const eventsStore = useEventsStore();
       if (!auth.user) throw new Error("Not logged in");
@@ -64,16 +68,6 @@ export const useTicketsStore = defineStore("tickets", {
       };
       this.tickets.push(ticket);
       eventsStore.decrementSpots(eventId);
-
-      try {
-        const saved = await registerForEvent(eventId);
-        // Once the backend is live, prefer its qrCode/ticket id (server is
-        // the source of truth for ticket issuance).
-        if (saved) Object.assign(ticket, saved);
-      } catch (err) {
-        console.warn("[tickets store] registerFree API call failed, kept optimistic ticket:", err.message);
-      }
-
       return ticket;
     },
 
@@ -83,7 +77,7 @@ export const useTicketsStore = defineStore("tickets", {
       return this.registerFree(eventId);
     },
 
-    async checkIn(qrCode) {
+    checkIn(qrCode) {
       const ticket = this.tickets.find((t) => t.qrCode === qrCode);
       if (!ticket) {
         return { ok: false, message: "QR code not found. Please verify the ticket." };
@@ -102,13 +96,6 @@ export const useTicketsStore = defineStore("tickets", {
         attendeeName: ticket.event.title,
         checkedInAt: new Date().toLocaleString(),
       });
-
-      try {
-        await checkInRequest(qrCode);
-      } catch (err) {
-        console.warn("[tickets store] checkIn API call failed, kept optimistic update:", err.message);
-      }
-
       return { ok: true, ticket, message: "Check-in successful!" };
     },
   },

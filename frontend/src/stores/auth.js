@@ -1,5 +1,4 @@
 import { defineStore } from "pinia";
-import { loginRequest } from "@/api/auth";
 
 // Demo accounts so the team can log in instantly during testing/demo
 // without needing the real backend yet. Matches the USER entity roles:
@@ -47,7 +46,9 @@ function deriveGuestUser(email, role) {
 export const useAuthStore = defineStore("auth", {
   state: () => ({
     user: null,
-    token: localStorage.getItem("eventora_token") || null,
+    // TODO (Week 4 — Backend Core): replace with a real JWT received from
+    // POST /auth/login and persist it (e.g. via Pinia + an Axios interceptor)
+    token: null,
   }),
 
   getters: {
@@ -59,33 +60,15 @@ export const useAuthStore = defineStore("auth", {
   },
 
   actions: {
-    /**
-     * Tries the real Slim 4 /auth/login route first (returns { user, token }
-     * once Hosam's backend is live). Falls back to the local demo accounts
-     * if the API isn't reachable yet, so the rest of the team can keep
-     * testing the frontend without waiting on the backend.
-     */
-    async login(email, role, password = "") {
-      try {
-        const data = await loginRequest(email, password);
-        this.user = data.user;
-        this.token = data.token;
-        localStorage.setItem("eventora_token", data.token);
-        return;
-      } catch (err) {
-        console.warn("[auth store] login API call failed, using demo account:", err.message);
-      }
-
+    login(email, role) {
       const matched = DEMO_USERS[email.toLowerCase()];
       this.user = matched ?? deriveGuestUser(email, role);
-      // No real token in mock mode — protected API calls will 401 until
-      // the backend is live, which is expected at this stage.
+      // TODO: set this.token from the real API response once Slim 4 auth is live
     },
 
     logout() {
       this.user = null;
       this.token = null;
-      localStorage.removeItem("eventora_token");
     },
 
     /**
