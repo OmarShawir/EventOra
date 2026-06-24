@@ -4,7 +4,7 @@
 
 ```
 main          ← production-ready only, never commit directly
-develop       ← integration branch, merge features here first
+dev       ← integration branch, merge features here first
 feature/*     ← one branch per feature or page
 fix/*         ← bug fixes
 ```
@@ -15,7 +15,7 @@ fix/*         ← bug fixes
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/YOUR_USERNAME/eventora-frontend.git
+git clone https://github.com/YOUR_USERNAME/EventOra.git
 cd eventora-frontend
 
 # 2. Install dependencies
@@ -38,8 +38,8 @@ npm run dev
 
 ```bash
 # Always branch off develop, never off main
-git checkout develop
-git pull origin develop
+git checkout dev
+git pull origin dev
 git checkout -b feature/your-feature-name
 
 # Examples:
@@ -65,12 +65,12 @@ git push origin feature/navbar
 
 ```bash
 # When your feature is done
-git checkout develop
-git pull origin develop
+git checkout dev
+git pull origin dev
 git merge feature/navbar
 
 # Resolve any conflicts, then
-git push origin develop
+git push origin dev
 
 # Clean up the feature branch
 git branch -d feature/navbar
@@ -82,7 +82,7 @@ git push origin --delete feature/navbar
 ```bash
 git checkout main
 git pull origin main
-git merge develop
+git merge dev
 git push origin main
 
 # Tag the submission
