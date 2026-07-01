@@ -93,17 +93,6 @@ class AuthController
             return JsonResponse::error($response, 'Validation failed.', 422, ['fields' => $errors]);
         }
 
-        // Restrict to UTM email addresses only
-        $emailDomain = strtolower(substr(strrchr($data['email'], '@'), 1));
-        $utmDomains  = ['utm.my', 'graduate.utm.my'];
-        if (!in_array($emailDomain, $utmDomains, true)) {
-            return JsonResponse::error(
-                $response,
-                'Registration is restricted to UTM email addresses (@utm.my or @graduate.utm.my).',
-                403
-            );
-        }
-
         $pdo = Connection::get();
 
         $existing = $pdo->prepare('SELECT id, email_verified FROM users WHERE email = ?');
@@ -229,17 +218,6 @@ class AuthController
 
         $email = $info['email'];
         $name = $info['name'] ?? explode('@', $email)[0];
-
-        // Restrict to UTM email domains
-        $emailDomain = strtolower(substr(strrchr($email, '@'), 1));
-        $utmDomains  = ['utm.my', 'graduate.utm.my'];
-        if (!in_array($emailDomain, $utmDomains, true)) {
-            return JsonResponse::error(
-                $response,
-                'Google sign-in is restricted to UTM G-Suite accounts (@utm.my or @graduate.utm.my).',
-                403
-            );
-        }
 
         $pdo = Connection::get();
         $user = $this->findUserByEmail($pdo, $email);

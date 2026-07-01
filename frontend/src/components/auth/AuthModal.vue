@@ -183,7 +183,9 @@ async function handleRegister(e) {
 
   const nameErr = !regName.value.value ? "Full name is required" : "";
   const raw = regMatric.value.value.toUpperCase();
-  const matricErr = !raw ? "Matric number is required" : !/^A\d{2}[A-Z]{2}\d{4}$/.test(raw) ? "Format: A24AB1234" : "";
+  // Matric number is optional (non-UTM users won't have one); only validate
+  // its format when something was actually entered.
+  const matricErr = raw && !/^A\d{2}[A-Z]{2}\d{4}$/.test(raw) ? "Format: A24AB1234" : "";
   const emailErr = validateEmail(regEmail.value.value);
   const pwErr = validatePassword(regPw.value.value);
   const confirmErr = !regConfirm.value.value ? "Please confirm your password" : regConfirm.value.value !== regPw.value.value ? "Passwords do not match" : "";
@@ -451,7 +453,7 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
           </div>
 
           <p style="font-size: 15px; color: #1a1a1a; margin-bottom: 24px; font-weight: 500">
-            Create your UTM student account to register for events.
+            Create your account to register for events.
           </p>
 
           <!-- Full name -->
@@ -474,7 +476,7 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
 
           <!-- Matric number -->
           <div style="margin-bottom: 16px">
-            <label style="display: block; font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px">Matric number</label>
+            <label style="display: block; font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px">Matric number <span style="color: var(--text-secondary); font-weight: 400">(optional)</span></label>
             <div
               :style="{
                 display: 'flex', alignItems: 'center',
@@ -496,7 +498,7 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
             <p v-if="regMatric.touched && regMatric.error" class="auth-field-error">
               <AlertCircle :size="12" /> {{ regMatric.error }}
             </p>
-            <p style="font-size: 11px; color: #AAAAAA; margin-top: 4px">Found on your UTM student card</p>
+            <p style="font-size: 11px; color: #AAAAAA; margin-top: 4px">UTM students only — found on your student card</p>
           </div>
 
           <!-- Email -->
