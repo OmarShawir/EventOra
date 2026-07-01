@@ -2,6 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-app: #f9f9f9;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-pill: #f9f9f9;
+  --bg-hover: #f9f9f9;
+  --text-primary: #1a1a1a;
+  --text-secondary: #555555;
+  --text-light: rgba(255, 255, 255, 0.75);
+  --border-color: rgba(229, 229, 229, 0.6);
+  --border-card: #e5e5e5;
+  --maroon: #520000;
+  --maroon-hover: #3a0000;
+  --maroon-light: #fff5f5;
+  --maroon-border: #c17070;
+  --accent: #c17070;
+  --bg-modal: rgba(255, 255, 255, 0.95);
+  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --bg-shimmer: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+}
+
+html.dark {
+  --bg-app: #09090b;
+  --bg-surface: rgba(18, 18, 23, 0.85);
+  --bg-card: #121216;
+  --bg-pill: #1c1c21;
+  --bg-hover: #22222a;
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-light: rgba(244, 244, 245, 0.6);
+  --border-color: rgba(63, 63, 70, 0.4);
+  --border-card: #27272a;
+  --maroon: #ef5350;
+  --maroon-hover: #e53935;
+  --maroon-light: #2c1a1a;
+  --maroon-border: #5c2c2c;
+  --accent: #e57373;
+  --bg-modal: rgba(24, 24, 28, 0.98);
+  --shadow-dropdown: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --bg-shimmer: linear-gradient(90deg, #1c1c21 25%, #2a2a35 50%, #1c1c21 75%);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -10,12 +52,13 @@ html,
 body {
   margin: 0;
   padding: 0;
+  transition: background-color 250ms ease, border-color 250ms ease, color 250ms ease;
 }
 
 body {
   font-family: "Inter", sans-serif;
-  background: #f9f9f9;
-  color: #1a1a1a;
+  background: var(--bg-app);
+  color: var(--text-primary);
 }
 
 button {
@@ -26,6 +69,7 @@ button {
   0% {
     background-position: 200% 0;
   }
+
   100% {
     background-position: -200% 0;
   }
