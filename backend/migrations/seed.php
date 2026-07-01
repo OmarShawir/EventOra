@@ -41,8 +41,10 @@ echo "Cleared existing data.{$nl}";
 // ── Demo users (one per role, matching the frontend's DEMO_USERS) ──────────
 $demoPasswordHash = password_hash('password123', PASSWORD_BCRYPT);
 
+// email_verified = 1 so the demo accounts can log in immediately without
+// going through the real email verification flow (no mailbox to check).
 $insertUser = $pdo->prepare(
-    'INSERT INTO users (name, email, password_hash, role, society) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO users (name, email, password_hash, role, society, email_verified) VALUES (?, ?, ?, ?, ?, 1)'
 );
 
 $insertUser->execute(['Ahmad Syafiq', 'attendee@utm.my', $demoPasswordHash, 'attendee', null]);
