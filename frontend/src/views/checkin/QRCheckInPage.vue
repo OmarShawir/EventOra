@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onBeforeUnmount } from "vue";
+import { ref, onBeforeUnmount, nextTick } from "vue";
 import QrScanner from "qr-scanner";
 import { Camera, CheckCircle2, XCircle, RotateCcw, Clock } from "lucide-vue-next";
 import { useTicketsStore } from "@/stores/tickets";
@@ -22,14 +22,27 @@ async function requestCamera() {
   cameraGranted.value = true; // reveal the viewfinder + manual entry either way
   cameraError.value = "";
 
-  if (!navigator.mediaDevices?.getUserMedia || !(await QrScanner.hasCamera())) {
-    cameraError.value = "No camera available on this device — use manual entry below.";
+  if (!window.isSecureContext) {
+    cameraError.value = "Camera needs a secure (https) connection.";
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    cameraError.value = "This browser doesn't support camera access — use manual entry below.";
+    return;
+  }
+
+  // Ensure the <video> element is actually in the DOM before QrScanner binds
+  // to it (it lives behind a v-else that only renders once cameraGranted is
+  // true). nextTick — not setTimeout — guarantees Vue has flushed the render.
+  // Note: we deliberately DON'T pre-check QrScanner.hasCamera(); on iOS Safari
+  // it false-negatives before permission is granted and would wrongly bail.
+  await nextTick();
+  if (!videoEl.value) {
+    cameraError.value = "Camera view failed to initialise — reload and try again.";
     return;
   }
 
   try {
-    // Wait a tick so the <video> is rendered before QrScanner binds to it.
-    await new Promise((r) => setTimeout(r, 0));
     scanner = new QrScanner(videoEl.value, (res) => onDecoded(res.data), {
       preferredCamera: "environment", // rear camera on phones
       highlightScanRegion: true,
@@ -39,11 +52,18 @@ async function requestCamera() {
     await scanner.start();
     cameraActive.value = true;
   } catch (err) {
-    // Permission denied / no hardware / insecure context — fall back to
-    // manual entry and the simulate button rather than dead-ending.
+    // Surface the real reason so permission vs hardware vs busy is obvious.
     cameraActive.value = false;
-    cameraError.value =
-      "Couldn't start the camera (permission denied or unsupported). Use manual entry below.";
+    const name = err?.name || "";
+    if (name === "NotAllowedError") {
+      cameraError.value = "Camera permission was denied. Enable it in your browser's site settings, then tap Enable Camera again.";
+    } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+      cameraError.value = "No usable camera found on this device — use manual entry below.";
+    } else if (name === "NotReadableError") {
+      cameraError.value = "The camera is in use by another app. Close it and try again.";
+    } else {
+      cameraError.value = "Couldn't start the camera (" + (err?.message || name || "unknown error") + "). Use manual entry below.";
+    }
   }
 }
 
