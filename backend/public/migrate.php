@@ -5,7 +5,7 @@ use App\Database\Connection;
 use App\Env;
 
 try {
-    Env::load(__DIR__ . '/../');
+    Env::load(__DIR__ . '/../.env');
     $pdo = Connection::get();
     
     echo "Connecting to database...<br>";
