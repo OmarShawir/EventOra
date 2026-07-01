@@ -43,21 +43,21 @@ function backToList() {
 
   <!-- List view -->
   <template v-else>
-    <div style="background:linear-gradient(to bottom,#FFF5F5,#F9F9F9);padding:52px 24px 44px">
+    <div style="background:linear-gradient(to bottom,var(--maroon-light),var(--bg-app));padding:52px 24px 44px">
       <div style="max-width:680px;margin:0 auto;text-align:center">
-        <p style="font-size:11px;font-weight:500;color:#520000;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px">
+        <p style="font-size:11px;font-weight:500;color:var(--maroon);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px">
           Universiti Teknologi Malaysia
         </p>
-        <h1 style="font-size:clamp(26px,5vw,40px);font-weight:700;color:#1a1a1a;line-height:1.2;margin-bottom:12px">
+        <h1 style="font-size:clamp(26px,5vw,40px);font-weight:700;color:var(--text-primary);line-height:1.2;margin-bottom:12px">
           Student Societies
         </h1>
-        <p style="font-size:16px;color:#555555;line-height:1.65;margin-bottom:28px">
+        <p style="font-size:16px;color:var(--text-secondary);line-height:1.65;margin-bottom:28px">
           {{ societies.length }} active societies on campus. Click any society to browse their events and learn more.
         </p>
 
         <!-- Search -->
         <div style="position:relative;max-width:480px;margin:0 auto">
-          <Search :size="17" :style="{ position:'absolute', left:'14px', top:'50%', transform:'translateY(-50%)', color: focused ? '#520000' : '#AAAAAA', pointerEvents:'none' }"/>
+          <Search :size="17" :style="{ position:'absolute', left:'14px', top:'50%', transform:'translateY(-50%)', color: focused ? 'var(--maroon)' : 'var(--text-secondary)', pointerEvents:'none' }"/>
           <input
             v-model="search"
             @focus="focused=true"
@@ -65,8 +65,9 @@ function backToList() {
             placeholder="Search societies or faculties…"
             :style="{
               width:'100%', height:'48px', paddingLeft:'44px', paddingRight:'16px',
-              border:`1px solid ${focused ? '#520000' : '#E5E5E5'}`, borderRadius:'8px',
-              fontSize:'15px', background: focused ? '#FFF5F5' : '#fff', outline:'none',
+              border:`1px solid ${focused ? 'var(--maroon)' : 'var(--border-color)'}`, borderRadius:'8px',
+              fontSize:'15px', background: focused ? 'var(--maroon-light)' : 'var(--bg-card)', outline:'none',
+              color: 'var(--text-primary)',
               boxShadow: focused ? '0 0 0 3px rgba(82,0,0,0.08)' : 'none',
               transition:'all 150ms', boxSizing:'border-box',
             }"
@@ -76,7 +77,7 @@ function backToList() {
     </div>
 
     <div style="max-width:1280px;margin:0 auto;padding:28px 24px 64px">
-      <p style="font-size:13px;color:#555555;margin-bottom:20px">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:20px">
         {{ filtered.length }} societ{{ filtered.length !== 1 ? 'ies' : 'y' }} — click to view events
       </p>
 
@@ -85,9 +86,9 @@ function backToList() {
       </div>
 
       <div v-if="filtered.length===0" style="text-align:center;padding:64px 0">
-        <Users :size="48" style="color:#C17070;margin-bottom:12px;stroke-width:1.5"/>
-        <p style="font-size:16px;font-weight:600;color:#1a1a1a;margin-bottom:6px">No societies found</p>
-        <p style="font-size:14px;color:#555555">Try a different search term.</p>
+        <Users :size="48" style="color:var(--accent);margin-bottom:12px;stroke-width:1.5"/>
+        <p style="font-size:16px;font-weight:600;color:var(--text-primary);margin-bottom:6px">No societies found</p>
+        <p style="font-size:14px;color:var(--text-secondary)">Try a different search term.</p>
       </div>
     </div>
 

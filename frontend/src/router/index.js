@@ -47,6 +47,26 @@ const router = createRouter({
       component: () => import("@/views/checkin/QRCheckInPage.vue"),
       meta: { requiresRole: "organiser" },
     },
+    // Email verification landing page — the backend redirects here after
+    // validating the one-time token (/auth/verify-email?token=...).
+    {
+      path: "/auth/verified",
+      name: "verify-email",
+      component: () => import("@/views/VerifyEmailPage.vue"),
+    },
+    // Password reset page — linked from the reset email (/reset-password?token=...).
+    {
+      path: "/reset-password",
+      name: "reset-password",
+      component: () => import("@/views/ResetPasswordPage.vue"),
+    },
+    // Stripe payment success landing page
+    {
+      path: "/payment-success",
+      name: "payment-success",
+      component: () => import("@/views/PaymentSuccessPage.vue"),
+      meta: { requiresRole: "attendee" },
+    },
   ],
   scrollBehavior() {
     return { top: 0 };
@@ -58,11 +78,20 @@ const router = createRouter({
 // data or functions" requirement). During testing/demo, use the dev role
 // switcher (see components/common/DevRoleSwitcher.vue) instead of editing
 // this guard.
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
+  const auth = useAuthStore();
+
+  // If a token exists but user profile is not loaded yet, restore the session first
+  if (auth.token && !auth.user) {
+    try {
+      await auth.restoreSession();
+    } catch (err) {
+      console.warn("Failed to restore session in router guard:", err);
+    }
+  }
+
   const requiredRole = to.meta.requiresRole;
   if (!requiredRole) return true;
-
-  const auth = useAuthStore();
 
   if (!auth.isAuthenticated) {
     return { name: "home", query: { authRequired: "1" } };

@@ -1,11 +1,13 @@
 <script setup>
 import { ref, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { Calendar, MapPin, Users, Clock, ArrowLeft, CreditCard, CheckCircle2, X, Tag, Share2 } from "lucide-vue-next";
+import { Calendar, MapPin, Users, Clock, ArrowLeft, CreditCard, CheckCircle2, X, Tag, Share2, Send, MessageCircle, Instagram } from "lucide-vue-next";
 import { useEventsStore } from "@/stores/events";
 import { useTicketsStore } from "@/stores/tickets";
 import { useAuthStore } from "@/stores/auth";
 import Footer from "@/components/common/Footer.vue";
+import QRCodeDisplay from "@/components/tickets/QRCodeDisplay.vue";
+import api from "@/api/axios";
 
 const route = useRoute();
 const router = useRouter();
@@ -14,7 +16,7 @@ const ticketsStore = useTicketsStore();
 const auth = useAuthStore();
 
 const event = computed(() => eventsStore.getEventById(route.params.id));
-const myTicket = computed(() => ticketsStore.myTickets.find((t) => t.eventId === route.params.id));
+const myTicket = computed(() => ticketsStore.myTickets.find((t) => String(t.eventId) === String(route.params.id)));
 const registered = computed(() => !!myTicket.value);
 const almostFull = computed(() => event.value && event.value.spotsLeft > 0 && event.value.spotsLeft / event.value.capacity <= 0.1);
 const capacityPct = computed(() => event.value ? Math.round(((event.value.capacity - event.value.spotsLeft) / event.value.capacity) * 100) : 0);
@@ -22,6 +24,62 @@ const capacityPct = computed(() => event.value ? Math.round(((event.value.capaci
 // Modal state
 const showPayment = ref(false);
 const newTicket = ref(null);
+const showShare = ref(false);
+const copied = ref(false);
+ 
+const currentUrl = computed(() => window.location.href);
+ 
+const shareUrls = computed(() => {
+  const url = currentUrl.value;
+  const title = event.value ? event.value.title : "Event";
+  return {
+    whatsapp: `https://api.whatsapp.com/send?text=${encodeURIComponent("Check out this event on EventOra: " + title + " - " + url)}`,
+    telegram: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent("Check out this event on EventOra: " + title)}`,
+  };
+});
+ 
+function copyLink(target) {
+  const url = currentUrl.value;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = url;
+      textarea.style.position = "fixed";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
+    copied.value = true;
+    setTimeout(() => { copied.value = false; }, 2000);
+    if (target === "Instagram") {
+      const shareText = `Check out this event on EventOra: ${event.value.title} - ${url}`;
+      // Attempt to open the Instagram app sharing sheet (mobile deep link)
+      window.location.href = `instagram://sharesheet?text=${encodeURIComponent(shareText)}`;
+      // Fallback to web DM inbox for desktop users after a short delay
+      setTimeout(() => {
+        window.open("https://www.instagram.com/direct/inbox/", "_blank");
+      }, 1000);
+    }
+  } catch (err) {
+    console.error("Copy failed: ", err);
+    alert("Failed to copy link automatically. Please select it from the box and copy manually.");
+  }
+}
+ 
+function shareTelegram() {
+  const url = currentUrl.value;
+  const title = event.value ? event.value.title : "Event";
+  const shareText = `Check out this event on EventOra: ${title}`;
+  // Attempt to open Telegram app directly
+  window.location.href = `tg://msg_url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(shareText)}`;
+  // Fallback to web sharing if the app doesn't open
+  setTimeout(() => {
+    window.open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(shareText)}`, "_blank");
+  }, 1000);
+}
 
 // Payment form
 const payStep = ref("form"); // form | processing | done
@@ -33,46 +91,65 @@ const cardName = ref("");
 function formatCard(v) { return v.replace(/\D/g, "").slice(0, 16).replace(/(.{4})/g, "$1 ").trim(); }
 function formatExpiry(v) { const d = v.replace(/\D/g, "").slice(0, 4); return d.length >= 3 ? `${d.slice(0,2)}/${d.slice(2)}` : d; }
 
-function handleRegister() {
+async function handleRegister() {
   if (!auth.isAuthenticated) { router.push({ query: { authRequired: "1" } }); return; }
-  if (event.value.price > 0) { showPayment.value = true; return; }
-  const ticket = ticketsStore.registerFree(event.value.id);
-  newTicket.value = ticket;
-}
-
-async function handlePay(e) {
-  e.preventDefault();
-  payStep.value = "processing";
-  await new Promise((r) => setTimeout(r, 1800));
-  payStep.value = "done";
-  setTimeout(() => {
-    showPayment.value = false;
-    payStep.value = "form";
-    const ticket = ticketsStore.registerPaid(event.value.id);
-    newTicket.value = ticket;
-  }, 1200);
-}
-
-function downloadICS() {
-  const ev = event.value;
-  const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${ev.title}\nLOCATION:${ev.venue}\nDTSTART:20260621T090000\nDTEND:20260621T170000\nDESCRIPTION:${ev.societyName}\nEND:VEVENT\nEND:VCALENDAR`;
-  const blob = new Blob([ics], { type: "text/calendar" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = `${ev.title.replace(/\s+/g, "_")}.ics`; a.click();
-}
-
-// Deterministic QR pattern from qrCode string (same algorithm as the original)
-function qrRects(qrData) {
-  const rects = [];
-  for (let r = 0; r < 13; r++) {
-    for (let c = 0; c < 13; c++) {
-      const hash = (qrData.charCodeAt((r * 13 + c) % qrData.length) + r * 7 + c * 3) % 3;
-      if (hash !== 0) rects.push({ x: 9 + c * 1.5, y: 9 + r * 1.5 });
+  if (event.value.price > 0) {
+    try {
+      const response = await api.post(`/events/${event.value.id}/checkout-session`);
+      if (response.data && response.data.checkoutUrl) {
+        window.location.href = response.data.checkoutUrl;
+      } else {
+        throw new Error("No checkout URL returned.");
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || err.message || "Failed to initiate payment session");
     }
+    return;
   }
-  return rects;
+  try {
+    const ticket = await ticketsStore.registerFree(event.value.id);
+    newTicket.value = ticket;
+  } catch (err) {
+    alert(err.response?.data?.error || err.message || "Failed to register");
+  }
 }
+
+
+
+function formatGoogleCalendarDate(dateStr) {
+  if (!dateStr) return "";
+  // Standardize string format for browser-native date parsing
+  const cleanStr = dateStr.includes(" ") ? dateStr.replace(" ", "T") : dateStr;
+  const d = new Date(cleanStr);
+  if (isNaN(d.getTime())) return "";
+  
+  const pad = (n) => String(n).padStart(2, "0");
+  const yyyy = d.getUTCFullYear();
+  const mm = pad(d.getUTCMonth() + 1);
+  const dd = pad(d.getUTCDate());
+  const hh = pad(d.getUTCHours());
+  const min = pad(d.getUTCMinutes());
+  const ss = pad(d.getUTCSeconds());
+  
+  return `${yyyy}${mm}${dd}T${hh}${min}${ss}Z`;
+}
+
+function addToGoogleCalendar() {
+  const ev = event.value;
+  if (!ev) return;
+  
+  const start = ev.starts_at || ev.date;
+  const end = ev.ends_at || ev.date;
+  
+  const startFormatted = formatGoogleCalendarDate(start);
+  const endFormatted = formatGoogleCalendarDate(end);
+  
+  const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(ev.title)}&dates=${startFormatted}/${endFormatted}&details=${encodeURIComponent(ev.description || ev.societyName)}&location=${encodeURIComponent(ev.venue)}`;
+  
+  window.open(gcalUrl, "_blank");
+}
+
+
 </script>
 
 <template>
@@ -108,63 +185,63 @@ function qrRects(qrData) {
       <!-- Left column -->
       <div>
         <!-- About -->
-        <div style="background:#fff;border:1px solid #E5E5E5;border-radius:8px;padding:24px;margin-bottom:24px">
-          <h2 style="font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:16px">About this event</h2>
-          <p style="font-size:15px;color:#555555;line-height:1.75">{{ event.description }}</p>
+        <div style="background:var(--bg-card);border:1px solid var(--border-card);border-radius:8px;padding:24px;margin-bottom:24px">
+          <h2 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:16px">About this event</h2>
+          <p style="font-size:15px;color:var(--text-secondary);line-height:1.75">{{ event.description }}</p>
           <div v-if="event.tags && event.tags.length" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
-            <span v-for="tag in event.tags" :key="tag" style="background:#FFF5F5;border:1px solid #C17070;border-radius:20px;font-size:12px;color:#520000;padding:3px 10px;display:flex;align-items:center;gap:4px">
+            <span v-for="tag in event.tags" :key="tag" style="background:var(--maroon-light);border:1px solid var(--maroon-border);border-radius:20px;font-size:12px;color:var(--maroon);padding:3px 10px;display:flex;align-items:center;gap:4px">
               <Tag :size="11"/> {{ tag }}
             </span>
           </div>
         </div>
 
         <!-- Event details -->
-        <div style="background:#fff;border:1px solid #E5E5E5;border-radius:8px;padding:24px;margin-bottom:24px">
-          <h2 style="font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:16px">Event details</h2>
+        <div style="background:var(--bg-card);border:1px solid var(--border-card);border-radius:8px;padding:24px;margin-bottom:24px">
+          <h2 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:16px">Event details</h2>
           <div v-for="item in [
             { icon: Calendar, label: 'Date', value: event.date },
             { icon: Clock, label: 'Time', value: `${event.time} – ${event.endsAt}` },
             { icon: MapPin, label: 'Venue', value: event.venue },
             { icon: Users, label: 'Capacity', value: `${event.capacity - event.spotsLeft} / ${event.capacity} registered` },
           ]" :key="item.label" style="display:flex;gap:16px;margin-bottom:16px;align-items:flex-start">
-            <div style="width:36px;height:36px;border-radius:8px;background:#FFF5F5;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <component :is="item.icon" :size="16" style="color:#520000"/>
+            <div style="width:36px;height:36px;border-radius:8px;background:var(--maroon-light);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <component :is="item.icon" :size="16" style="color:var(--maroon)"/>
             </div>
             <div>
-              <p style="font-size:12px;color:#555555;margin-bottom:2px">{{ item.label }}</p>
-              <p style="font-size:14px;font-weight:500;color:#1a1a1a">{{ item.value }}</p>
+              <p style="font-size:12px;color:var(--text-secondary);margin-bottom:2px">{{ item.label }}</p>
+              <p style="font-size:14px;font-weight:500;color:var(--text-primary)">{{ item.value }}</p>
             </div>
           </div>
           <!-- Capacity bar -->
           <div style="margin-top:8px">
-            <div style="height:6px;background:#E5E5E5;border-radius:4px;overflow:hidden">
-              <div :style="{ height:'100%', width:`${capacityPct}%`, background: almostFull ? '#B45309' : event.spotsLeft===0 ? '#520000' : '#1A7A4A', borderRadius:'4px', transition:'width 300ms' }"/>
+            <div style="height:6px;background:var(--border-color);border-radius:4px;overflow:hidden">
+              <div :style="{ height:'100%', width:`${capacityPct}%`, background: almostFull ? '#B45309' : event.spotsLeft===0 ? 'var(--maroon)' : '#1A7A4A', borderRadius:'4px', transition:'width 300ms' }"/>
             </div>
-            <p style="font-size:12px;color:#555555;margin-top:4px">{{ capacityPct }}% capacity filled</p>
+            <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">{{ capacityPct }}% capacity filled</p>
           </div>
         </div>
 
         <!-- Organised by -->
-        <div style="background:#fff;border:1px solid #E5E5E5;border-radius:8px;padding:24px">
-          <h2 style="font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:4px">Organised by</h2>
-          <p style="font-size:14px;color:#520000;font-weight:500">{{ event.societyName }}</p>
-          <p style="font-size:13px;color:#555555;margin-top:4px">Contact: {{ event.organiserName }}</p>
+        <div style="background:var(--bg-card);border:1px solid var(--border-card);border-radius:8px;padding:24px">
+          <h2 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:4px">Organised by</h2>
+          <p style="font-size:14px;color:var(--maroon);font-weight:500">{{ event.societyName }}</p>
+          <p style="font-size:13px;color:var(--text-secondary);margin-top:4px">Contact: {{ event.organiserName }}</p>
         </div>
       </div>
 
       <!-- Right: sticky registration panel -->
       <div style="position:sticky;top:88px">
-        <div style="background:#fff;border:1px solid #E5E5E5;border-radius:8px;padding:24px;box-shadow:0 4px 16px rgba(0,0,0,0.06)">
+        <div style="background:var(--bg-card);border:1px solid var(--border-card);border-radius:8px;padding:24px;box-shadow:0 4px 16px rgba(0,0,0,0.06)">
 
           <!-- COMPLETED -->
           <template v-if="event.status === 'completed'">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
-              <span style="background:#F3F4F6;color:#555555;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px">Event Ended</span>
+              <span style="background:var(--bg-pill);color:var(--text-secondary);font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px">Event Ended</span>
             </div>
-            <div style="background:#F9F9F9;border:1px solid #E5E5E5;border-radius:8px;padding:16px;text-align:center;margin-bottom:16px">
+            <div style="background:var(--bg-pill);border:1px solid var(--border-card);border-radius:8px;padding:16px;text-align:center;margin-bottom:16px">
               <p style="font-size:22px;margin-bottom:6px">🏁</p>
-              <p style="font-size:14px;font-weight:600;color:#1a1a1a;margin-bottom:4px">This event has ended</p>
-              <p style="font-size:13px;color:#555555;line-height:1.55">Registration is now closed. {{ event.capacity - event.spotsLeft }} people attended this event.</p>
+              <p style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px">This event has ended</p>
+              <p style="font-size:13px;color:var(--text-secondary);line-height:1.55">Registration is now closed. {{ event.capacity - event.spotsLeft }} people attended this event.</p>
             </div>
             <button @click="router.push('/societies')" class="detail-btn detail-btn--outline">
               Browse more from {{ event.societyName.replace('UTM ', '') }}
@@ -174,28 +251,31 @@ function qrRects(qrData) {
           <!-- ACTIVE / UPCOMING -->
           <template v-else>
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-              <span :style="{ fontSize:'26px', fontWeight:700, color: event.price===0 ? '#1A7A4A' : '#1a1a1a' }">
+              <span :style="{ fontSize:'26px', fontWeight:700, color: event.price===0 ? '#1A7A4A' : 'var(--text-primary)' }">
                 {{ event.price === 0 ? 'FREE' : `RM ${event.price.toFixed(2)}` }}
               </span>
-              <span v-if="event.price > 0" style="font-size:13px;color:#555555">per person</span>
+              <span v-if="event.price > 0" style="font-size:13px;color:var(--text-secondary)">per person</span>
             </div>
-            <p :style="{ fontSize:'13px', fontWeight:500, marginBottom:'20px', color: event.spotsLeft===0 ? '#520000' : almostFull ? '#B45309' : '#1A7A4A' }">
+            <p :style="{ fontSize:'13px', fontWeight:500, marginBottom:'20px', color: event.spotsLeft===0 ? 'var(--maroon)' : almostFull ? '#B45309' : '#1A7A4A' }">
               {{ event.spotsLeft===0 ? 'Fully booked — waitlist available' : almostFull ? `Only ${event.spotsLeft} spots left!` : `${event.spotsLeft} spots available` }}
             </p>
 
-            <div v-if="registered" style="background:#D1FAE5;border-radius:8px;padding:14px;text-align:center;margin-bottom:16px">
+            <div v-if="auth.isAuthenticated && !auth.isAttendee" style="background:var(--bg-pill);border-radius:8px;padding:14px;text-align:center;margin-bottom:16px;border:1px solid var(--border-card)">
+              <p style="font-size:13px;color:var(--text-secondary);font-weight:600">Registration is only available for attendees.</p>
+            </div>
+            <div v-else-if="registered" style="background:#D1FAE5;border-radius:8px;padding:14px;text-align:center;margin-bottom:16px">
               <CheckCircle2 :size="20" style="color:#1A7A4A;margin-bottom:4px"/>
               <p style="font-size:14px;font-weight:600;color:#065F46">You're registered!</p>
-              <button @click="router.push('/dashboard')" style="margin-top:8px;background:none;border:none;color:#520000;font-size:13px;font-weight:500;cursor:pointer;text-decoration:underline;font-family:inherit">View in My Tickets</button>
+              <button @click="router.push('/dashboard')" style="margin-top:8px;background:none;border:none;color:var(--maroon);font-size:13px;font-weight:500;cursor:pointer;text-decoration:underline;font-family:inherit">View in My Tickets</button>
             </div>
-            <button v-else @click="handleRegister" class="detail-btn detail-btn--register" :style="{ background: event.spotsLeft===0 ? 'none' : '#520000', color: event.spotsLeft===0 ? '#520000' : '#fff', border: event.spotsLeft===0 ? '1px solid #520000' : 'none' }">
+            <button v-else @click="handleRegister" class="detail-btn detail-btn--register" :style="{ background: event.spotsLeft===0 ? 'none' : 'var(--maroon)', color: event.spotsLeft===0 ? 'var(--maroon)' : '#fff', border: event.spotsLeft===0 ? '1px solid var(--maroon)' : 'none' }">
               {{ event.spotsLeft===0 ? 'Join Waitlist' : event.price>0 ? `Pay RM ${event.price.toFixed(2)} & Register` : 'Register for Free' }}
             </button>
 
-            <button @click="downloadICS" class="detail-btn detail-btn--ghost" style="margin-bottom:8px">
-              <Calendar :size="14"/> Add to Calendar (.ics)
+            <button @click="addToGoogleCalendar" class="detail-btn detail-btn--ghost" style="margin-bottom:8px">
+              <Calendar :size="14"/> Add to Google Calendar
             </button>
-            <button class="detail-btn detail-btn--ghost">
+            <button @click="showShare = true" class="detail-btn detail-btn--ghost">
               <Share2 :size="14"/> Share event
             </button>
           </template>
@@ -282,23 +362,9 @@ function qrRects(qrData) {
           <h2 style="font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:4px">You're registered!</h2>
           <p style="font-size:13px;color:#555555;margin-bottom:20px">{{ newTicket.event.title }}</p>
 
-          <!-- SVG QR visual -->
+          <!-- Real scannable QR code -->
           <div style="background:#1a1a1a;border-radius:8px;padding:16px;display:inline-block;margin-bottom:16px">
-            <div style="width:140px;height:140px;background:#fff;border-radius:4px;display:grid;place-items:center;position:relative;overflow:hidden">
-              <svg width="140" height="140" viewBox="0 0 29 29" style="image-rendering:pixelated">
-                <rect x="1" y="1" width="7" height="7" fill="#1A1A1A"/>
-                <rect x="2" y="2" width="5" height="5" fill="#fff"/>
-                <rect x="3" y="3" width="3" height="3" fill="#1A1A1A"/>
-                <rect x="21" y="1" width="7" height="7" fill="#1A1A1A"/>
-                <rect x="22" y="2" width="5" height="5" fill="#fff"/>
-                <rect x="23" y="3" width="3" height="3" fill="#1A1A1A"/>
-                <rect x="1" y="21" width="7" height="7" fill="#1A1A1A"/>
-                <rect x="2" y="22" width="5" height="5" fill="#fff"/>
-                <rect x="3" y="23" width="3" height="3" fill="#1A1A1A"/>
-                <rect v-for="(r,i) in qrRects(newTicket.qrCode)" :key="i" :x="r.x" :y="r.y" width="1" height="1" fill="#1A1A1A"/>
-                <rect x="13" y="13" width="3" height="3" fill="#520000"/>
-              </svg>
-            </div>
+            <QRCodeDisplay :value="newTicket.qrCode" :size="148" />
           </div>
 
           <p style="font-size:11px;font-weight:500;color:#AAAAAA;letter-spacing:0.05em;margin-bottom:4px">TICKET REFERENCE</p>
@@ -314,6 +380,52 @@ function qrRects(qrData) {
           <div style="display:flex;gap:8px">
             <button @click="newTicket=null" style="flex:1;height:44px;border:1px solid #E5E5E5;border-radius:8px;background:none;font-size:14px;font-weight:500;color:#555555;cursor:pointer;font-family:inherit">Close</button>
             <button @click="newTicket=null; router.push('/dashboard')" style="flex:1;height:44px;border:none;border-radius:8px;background:#520000;color:#fff;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">View in My Tickets</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Share Modal -->
+    <Teleport to="body">
+      <div v-if="showShare" @click.self="showShare=false" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:16px">
+        <div style="background:#fff;border-radius:12px;width:100%;max-width:360px;padding:24px;box-shadow:0 24px 48px rgba(0,0,0,0.2);text-align:left">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+            <h2 style="font-size:18px;font-weight:700;color:#1a1a1a;margin:0">Share Event</h2>
+            <button @click="showShare=false" style="background:none;border:none;cursor:pointer;color:#555555;padding:4px;display:flex;align-items:center"><X :size="20"/></button>
+          </div>
+          
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;text-align:center">
+            <!-- WhatsApp -->
+            <a :href="shareUrls.whatsapp" target="_blank" style="text-decoration:none;display:flex;flex-direction:column;align-items:center;gap:6px;color:#1a1a1a;font-size:12px;font-weight:500">
+              <div style="width:48px;height:48px;border-radius:50%;background:#E8F8F0;color:#128C7E;display:flex;align-items:center;justify-content:center">
+                <MessageCircle :size="22" />
+              </div>
+              WhatsApp
+            </a>
+            <!-- Telegram -->
+            <button @click="shareTelegram" style="background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;color:#1a1a1a;font-size:12px;font-weight:500;padding:0;font-family:inherit">
+              <div style="width:48px;height:48px;border-radius:50%;background:#E8F4F8;color:#0088cc;display:flex;align-items:center;justify-content:center">
+                <Send :size="22" style="transform: rotate(-25deg); margin-left: 2px; margin-top: -2px" />
+              </div>
+              Telegram
+            </button>
+            <!-- Instagram -->
+            <button @click="copyLink('Instagram')" style="background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;color:#1a1a1a;font-size:12px;font-weight:500;padding:0;font-family:inherit">
+              <div style="width:48px;height:48px;border-radius:50%;background:#FDF2F8;color:#E1306C;display:flex;align-items:center;justify-content:center">
+                <Instagram :size="22" />
+              </div>
+              Instagram
+            </button>
+          </div>
+          
+          <div style="border-top:1px solid #E5E5E5;padding-top:16px">
+            <label style="font-size:12px;font-weight:500;color:#555555;display:block;margin-bottom:6px">Or copy link</label>
+            <div style="display:flex;border:1px solid #E5E5E5;border-radius:8px;overflow:hidden;background:#F9F9F9;height:40px">
+              <input readonly :value="currentUrl" style="flex:1;border:none;background:none;padding:0 12px;font-size:13px;color:#555555;outline:none;font-family:inherit;width:100%"/>
+              <button @click="copyLink('Clipboard')" style="background:#520000;color:#fff;border:none;padding:0 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 150ms;white-space:nowrap">
+                {{ copied ? 'Copied!' : 'Copy' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>

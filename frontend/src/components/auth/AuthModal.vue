@@ -1,8 +1,9 @@
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from "vue";
+import { ref, watch, onMounted, onUnmounted, isRef } from "vue";
 import {
-  X, Eye, EyeOff, Mail, Lock, User, AlertCircle, CheckCircle2, ChevronRight,
+  X, Eye, EyeOff, Mail, Lock, User, AlertCircle, CheckCircle2, ChevronRight, KeyRound,
 } from "lucide-vue-next";
+import { useAuthStore } from "@/stores/auth";
 
 const props = defineProps({
   open: { type: Boolean, required: true },
@@ -10,13 +11,17 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["close", "success"]);
+const auth = useAuthStore();
 
 // ── State ─────────────────────────────────────────────────────────────────────
+// tabs: login | register | forgot
 const tab = ref(props.defaultTab);
 const showPw = ref(false);
 const showConfirm = ref(false);
 const submitting = ref(false);
+// submitted: false | "login" | "register-verify" | "forgot"
 const submitted = ref(false);
+const generalError = ref("");
 
 // Login fields
 const loginEmail = ref({ value: "", error: "", touched: false });
@@ -29,13 +34,40 @@ const regEmail = ref({ value: "", error: "", touched: false });
 const regPw = ref({ value: "", error: "", touched: false });
 const regConfirm = ref({ value: "", error: "", touched: false });
 
-// Reset when modal opens/tab changes, matching the React useEffect([defaultTab, open])
-watch([() => props.open, () => props.defaultTab], ([open, dt]) => {
+// Forgot password fields
+const forgotEmail = ref({ value: "", error: "", touched: false });
+
+// Reset when modal opens/tab changes
+watch(() => props.open, (open) => {
   if (open) {
-    tab.value = dt;
+    tab.value = props.defaultTab;
     submitted.value = false;
     showPw.value = false;
     showConfirm.value = false;
+    generalError.value = "";
+    document.body.style.overflow = "hidden";
+
+    // Initialize Google Identity Services
+    setTimeout(() => {
+      if (window.google) {
+        window.google.accounts.id.initialize({
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "1016843513361-9k9h9g85b7g4112e434l18g9334o1p9c.apps.googleusercontent.com",
+          callback: onGoogleResponse
+        });
+        
+        window.google.accounts.id.renderButton(
+          document.getElementById("google-hidden-btn-container"),
+          { theme: "outline", size: "large" }
+        );
+      }
+    }, 200);
+  } else {
+    document.body.style.overflow = "";
+  }
+});
+watch(() => props.defaultTab, (dt) => {
+  if (props.open) {
+    tab.value = dt;
   }
 });
 
@@ -44,7 +76,10 @@ function handleKey(e) {
   if (e.key === "Escape" && props.open) emit("close");
 }
 onMounted(() => document.addEventListener("keydown", handleKey));
-onUnmounted(() => document.removeEventListener("keydown", handleKey));
+onUnmounted(() => {
+  document.removeEventListener("keydown", handleKey);
+  document.body.style.overflow = "";
+});
 
 // ── Validation helpers ────────────────────────────────────────────────────────
 function validateEmail(v) {
@@ -59,9 +94,21 @@ function validatePassword(v) {
 }
 
 // ── Field helpers ─────────────────────────────────────────────────────────────
-function setVal(field, v) { field.value.value = v; field.value.error = ""; }
-function touch(field) { field.value.touched = true; }
-function setErr(field, e) { field.value.error = e; }
+function getFieldObject(field) {
+  return isRef(field) ? field.value : field;
+}
+function setVal(field, v) {
+  const obj = getFieldObject(field);
+  obj.value = v;
+  obj.error = "";
+}
+function touch(field) {
+  getFieldObject(field).touched = true;
+}
+function setErr(field, e) {
+  getFieldObject(field).error = e;
+}
+
 
 // ── Demo login ────────────────────────────────────────────────────────────────
 const demoAccounts = [
@@ -72,12 +119,54 @@ const demoAccounts = [
 
 async function quickLogin(d) {
   submitting.value = true;
-  await new Promise((r) => setTimeout(r, 500));
-  submitting.value = false;
-  submitted.value = true;
-  const parts = d.name.split(" ");
-  const initials = ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
-  setTimeout(() => { emit("success", { name: d.name, email: d.email, initials }); emit("close"); }, 700);
+  generalError.value = "";
+  try {
+    await auth.login(d.email, "password123");
+    submitting.value = false;
+    submitted.value = "login";
+    setTimeout(() => { emit("success", auth.user); emit("close"); }, 700);
+  } catch (err) {
+    submitting.value = false;
+    generalError.value = err.response?.data?.error || err.message || "Login failed";
+  }
+}
+
+async function onGoogleResponse(response) {
+  submitting.value = true;
+  generalError.value = "";
+  try {
+    await auth.loginWithGoogle(response.credential);
+    submitting.value = false;
+    submitted.value = "login";
+    setTimeout(() => { emit("success", auth.user); emit("close"); }, 700);
+  } catch (err) {
+    submitting.value = false;
+    generalError.value = err.response?.data?.error || err.message || "Google login failed";
+  }
+}
+
+function handleGoogleLogin() {
+  if (window.google) {
+    window.google.accounts.id.prompt((notification) => {
+      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+        const btn = document.querySelector("#google-hidden-btn-container [role=button]");
+        if (btn) {
+          btn.click();
+        } else {
+          window.google.accounts.id.renderButton(
+            document.getElementById("google-hidden-btn-container"),
+            { theme: "outline", size: "large" }
+          );
+          setTimeout(() => {
+            const b = document.querySelector("#google-hidden-btn-container [role=button]");
+            if (b) b.click();
+          }, 150);
+        }
+      }
+    });
+  } else {
+    generalError.value = "Google identity services not loaded yet.";
+  }
 }
 
 // ── Login submit ──────────────────────────────────────────────────────────────
@@ -91,12 +180,21 @@ async function handleLogin(e) {
   if (emailErr || pwErr) return;
 
   submitting.value = true;
-  await new Promise((r) => setTimeout(r, 1000));
-  submitting.value = false;
-  submitted.value = true;
-  const name = loginEmail.value.value.split("@")[0];
-  const initials = name.slice(0, 2).toUpperCase();
-  setTimeout(() => { emit("success", { name, email: loginEmail.value.value, initials }); emit("close"); }, 800);
+  generalError.value = "";
+  try {
+    await auth.login(loginEmail.value.value, loginPw.value.value);
+    submitting.value = false;
+    submitted.value = "login";
+    setTimeout(() => { emit("success", auth.user); emit("close"); }, 800);
+  } catch (err) {
+    submitting.value = false;
+    // Special case: unverified account
+    if (err.response?.data?.unverified) {
+      generalError.value = err.response.data.error;
+    } else {
+      generalError.value = err.response?.data?.error || err.message || "Invalid email or password";
+    }
+  }
 }
 
 // ── Register submit ───────────────────────────────────────────────────────────
@@ -119,12 +217,46 @@ async function handleRegister(e) {
   if (nameErr || matricErr || emailErr || pwErr || confirmErr) return;
 
   submitting.value = true;
-  await new Promise((r) => setTimeout(r, 1200));
-  submitting.value = false;
-  submitted.value = true;
-  const parts = regName.value.value.trim().split(" ");
-  const initials = ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? parts[0]?.[1] ?? "")).toUpperCase();
-  setTimeout(() => { emit("success", { name: regName.value.value, email: regEmail.value.value, initials }); emit("close"); }, 800);
+  generalError.value = "";
+  try {
+    const msg = await auth.register(
+      regName.value.value,
+      regEmail.value.value,
+      regPw.value.value,
+      raw
+    );
+    submitting.value = false;
+    if (msg === null) {
+      // Demo/fallback mode — guest session was created
+      submitted.value = "login";
+      setTimeout(() => { emit("success", auth.user); emit("close"); }, 800);
+    } else {
+      // Real backend: show email verification notice
+      submitted.value = "register-verify";
+    }
+  } catch (err) {
+    submitting.value = false;
+    generalError.value = err.response?.data?.error || err.message || "Registration failed";
+  }
+}
+
+// ── Forgot password submit ────────────────────────────────────────────────────
+async function handleForgot(e) {
+  e.preventDefault();
+  touch(forgotEmail);
+  const emailErr = validateEmail(forgotEmail.value.value);
+  if (emailErr) { setErr(forgotEmail, emailErr); return; }
+
+  submitting.value = true;
+  generalError.value = "";
+  try {
+    await auth.forgotPassword(forgotEmail.value.value);
+    submitting.value = false;
+    submitted.value = "forgot";
+  } catch (err) {
+    submitting.value = false;
+    generalError.value = err.response?.data?.error || err.message || "Something went wrong";
+  }
 }
 
 // ── Password strength ─────────────────────────────────────────────────────────
@@ -147,16 +279,16 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
       @click.self="emit('close')"
       style="position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px"
     >
-      <div style="background: #ffffff; border-radius: 12px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; position: relative; box-shadow: 0 24px 48px rgba(0,0,0,0.18)">
+      <div class="modal-no-scrollbar" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 12px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; position: relative; box-shadow: 0 24px 48px rgba(0,0,0,0.18)">
 
         <!-- Header -->
         <div style="padding: 24px 24px 0; display: flex; justify-content: space-between; align-items: flex-start">
           <div>
             <span style="font-size: 18px; font-weight: 700">
-              <span style="color: #1a1a1a">Event</span>
-              <span style="color: #520000">Ora</span>
+              <span style="color: var(--text-primary)">Event</span>
+              <span style="color: var(--maroon)">Ora</span>
             </span>
-            <p style="font-size: 13px; color: #555555; margin-top: 2px">UTM Campus Events</p>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-top: 2px">UTM Campus Events</p>
           </div>
           <button @click="emit('close')" class="auth-close-btn">
             <X :size="18" />
@@ -164,42 +296,97 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
         </div>
 
         <!-- Tabs -->
-        <div style="padding: 20px 24px 0; display: flex; border-bottom: 1px solid #E5E5E5">
+        <div style="padding: 20px 24px 0; display: flex; border-bottom: 1px solid var(--border-color)">
           <button
             v-for="t in ['login', 'register']"
             :key="t"
-            @click="tab = t; submitted = false"
+            @click="tab = t; submitted = false; generalError = ''"
             :style="{
               background: 'none', border: 'none', cursor: 'pointer',
               fontSize: '15px', fontWeight: tab === t ? 600 : 400,
-              color: tab === t ? '#520000' : '#555555',
+              color: tab === t ? 'var(--maroon)' : 'var(--text-secondary)',
               paddingBottom: '12px', paddingRight: '20px',
-              borderBottom: `2px solid ${tab === t ? '#520000' : 'transparent'}`,
+              borderBottom: `2px solid ${tab === t ? 'var(--maroon)' : 'transparent'}`,
               marginBottom: '-1px', transition: 'color 150ms, border-color 150ms',
+              display: tab === 'forgot' ? 'none' : 'block',
             }"
           >
             {{ t === "login" ? "Log in" : "Create account" }}
           </button>
+          <span
+            v-if="tab === 'forgot'"
+            style="font-size: 15px; font-weight: 600; color: var(--maroon); padding-bottom: 12px; border-bottom: 2px solid var(--maroon); margin-bottom: -1px"
+          >
+            Forgot password
+          </span>
         </div>
 
-        <!-- Success overlay -->
-        <div v-if="submitted" style="padding: 48px 24px; text-align: center">
+        <!-- ── SUCCESS: Login ── -->
+        <div v-if="submitted === 'login'" style="padding: 48px 24px; text-align: center">
           <div style="width: 64px; height: 64px; border-radius: 50%; background: #D1FAE5; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px">
             <CheckCircle2 :size="32" style="color: #1A7A4A" />
           </div>
-          <h2 style="font-size: 18px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px">
-            {{ tab === "login" ? "Welcome back!" : "Account created!" }}
-          </h2>
-          <p style="font-size: 14px; color: #555555">
-            {{ tab === "login" ? "Signing you in…" : "Setting up your account…" }}
+          <h2 style="font-size: 18px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px">Welcome back!</h2>
+          <p style="font-size: 14px; color: #555555">Signing you in…</p>
+        </div>
+
+        <!-- ── SUCCESS: Registration — email verification sent ── -->
+        <div v-else-if="submitted === 'register-verify'" style="padding: 40px 24px; text-align: center">
+          <div style="width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg, #ede9fe, #ddd6fe); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px">
+            <Mail :size="32" style="color: #7c3aed" />
+          </div>
+          <h2 style="font-size: 20px; font-weight: 700; color: #1a1a1a; margin-bottom: 10px">Check your email! 📧</h2>
+          <p style="font-size: 14px; color: #555555; line-height: 1.7; margin-bottom: 8px">
+            We've sent a verification link to
           </p>
+          <p style="font-size: 14px; font-weight: 600; color: #520000; margin-bottom: 16px">{{ regEmail.value }}</p>
+          <p style="font-size: 13px; color: #888; line-height: 1.6; margin-bottom: 24px">
+            Click the link in the email to activate your account. The link expires in <strong>24 hours</strong>.
+          </p>
+          <div style="background: #f9f9f9; border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px 16px; font-size: 12px; color: #555; text-align: left">
+            💡 <strong>Didn't receive it?</strong> Check your spam folder or
+            <button
+              type="button"
+              class="auth-link"
+              style="font-size: 12px"
+              @click="handleRegister({ preventDefault: () => {} })"
+            >
+              click here to resend
+            </button>.
+          </div>
+          <button type="button" @click="emit('close')" class="auth-submit-btn" style="margin-top: 24px">
+            Done
+          </button>
+        </div>
+
+        <!-- ── SUCCESS: Forgot password sent ── -->
+        <div v-else-if="submitted === 'forgot'" style="padding: 40px 24px; text-align: center">
+          <div style="width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg, #fee2e2, #fecaca); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px">
+            <Mail :size="32" style="color: #dc2626" />
+          </div>
+          <h2 style="font-size: 20px; font-weight: 700; color: #1a1a1a; margin-bottom: 10px">Reset link sent! 🔐</h2>
+          <p style="font-size: 14px; color: #555555; line-height: 1.7; margin-bottom: 8px">
+            If <strong style="color: #520000">{{ forgotEmail.value }}</strong> is registered and verified, we've sent a password reset link.
+          </p>
+          <p style="font-size: 13px; color: #888; line-height: 1.6; margin-bottom: 24px">
+            The link expires in <strong>1 hour</strong>. Check your spam folder if you don't see it.
+          </p>
+          <button type="button" @click="tab = 'login'; submitted = false; generalError = ''" class="auth-submit-btn">
+            Back to log in
+          </button>
         </div>
 
         <!-- ── LOGIN FORM ── -->
-        <form v-if="!submitted && tab === 'login'" @submit="handleLogin" style="padding: 24px" novalidate>
+        <form v-else-if="tab === 'login'" @submit="handleLogin" style="padding: 24px" novalidate>
+
+          <!-- General Error Alert -->
+          <div v-if="generalError" style="background: #FFF5F5; border: 1px solid #B91C1C; border-radius: 8px; padding: 12px; margin-bottom: 20px; color: #B91C1C; font-size: 13px; display: flex; align-items: center; gap: 8px">
+            <AlertCircle :size="16" />
+            <span>{{ generalError }}</span>
+          </div>
 
           <!-- Demo accounts -->
-          <div style="background: #F9F9F9; border: 1px solid #E5E5E5; border-radius: 8px; padding: 12px 14px; margin-bottom: 20px">
+          <div style="background: var(--bg-pill); border: 1px solid var(--border-card); border-radius: 8px; padding: 12px 14px; margin-bottom: 20px">
             <p style="font-size: 11px; font-weight: 600; color: #AAAAAA; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px">
               ⚡ Quick demo login
             </p>
@@ -217,14 +404,14 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
           </div>
 
           <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px">
-            <div style="flex: 1; height: 1px; background: #E5E5E5" />
+            <div style="flex: 1; height: 1px; background: var(--border-color)" />
             <span style="font-size: 12px; color: #AAAAAA">or sign in manually</span>
-            <div style="flex: 1; height: 1px; background: #E5E5E5" />
+            <div style="flex: 1; height: 1px; background: var(--border-color)" />
           </div>
 
           <!-- Email -->
           <div style="margin-bottom: 16px">
-            <label style="display: block; font-size: 13px; font-weight: 500; color: #1a1a1a; margin-bottom: 6px">Email address</label>
+            <label style="display: block; font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px">Email address</label>
             <AuthInputWrap :error="loginEmail.error" :touched="loginEmail.touched">
               <Mail :size="16" class="auth-input-icon" :class="{ 'auth-input-icon--error': loginEmail.touched && loginEmail.error }" />
               <input
@@ -263,7 +450,13 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
           </div>
 
           <div style="text-align: right; margin-top: -8px; margin-bottom: 20px">
-            <button type="button" class="auth-link">Forgot password?</button>
+            <button
+              type="button"
+              class="auth-link"
+              @click="tab = 'forgot'; submitted = false; generalError = ''; forgotEmail.value = loginEmail.value; forgotEmail.error = ''; forgotEmail.touched = false"
+            >
+              Forgot password?
+            </button>
           </div>
 
           <button type="submit" :disabled="submitting" class="auth-submit-btn" :class="{ 'auth-submit-btn--loading': submitting }">
@@ -277,12 +470,12 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
           </p>
 
           <div style="margin: 20px 0; display: flex; align-items: center; gap: 12px">
-            <div style="flex: 1; height: 1px; background: #E5E5E5" />
+            <div style="flex: 1; height: 1px; background: var(--border-color)" />
             <span style="font-size: 12px; color: #AAAAAA">or continue with</span>
-            <div style="flex: 1; height: 1px; background: #E5E5E5" />
+            <div style="flex: 1; height: 1px; background: var(--border-color)" />
           </div>
 
-          <button type="button" class="auth-google-btn">
+          <button type="button" @click="handleGoogleLogin" class="auth-google-btn">
             <svg width="18" height="18" viewBox="0 0 18 18">
               <path d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z" fill="#4285F4"/>
               <path d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2.01a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z" fill="#34A853"/>
@@ -294,7 +487,14 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
         </form>
 
         <!-- ── REGISTER FORM ── -->
-        <form v-if="!submitted && tab === 'register'" @submit="handleRegister" style="padding: 24px" novalidate>
+        <form v-else-if="tab === 'register'" @submit="handleRegister" style="padding: 24px" novalidate>
+          
+          <!-- General Error Alert -->
+          <div v-if="generalError" style="background: #FFF5F5; border: 1px solid #B91C1C; border-radius: 8px; padding: 12px; margin-bottom: 20px; color: #B91C1C; font-size: 13px; display: flex; align-items: center; gap: 8px">
+            <AlertCircle :size="16" />
+            <span>{{ generalError }}</span>
+          </div>
+
           <p style="font-size: 15px; color: #1a1a1a; margin-bottom: 24px; font-weight: 500">
             Create your UTM student account to register for events.
           </p>
@@ -319,15 +519,15 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
 
           <!-- Matric number -->
           <div style="margin-bottom: 16px">
-            <label style="display: block; font-size: 13px; font-weight: 500; color: #1a1a1a; margin-bottom: 6px">Matric number</label>
+            <label style="display: block; font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px">Matric number</label>
             <div
               :style="{
                 display: 'flex', alignItems: 'center',
-                border: `1px solid ${regMatric.touched && regMatric.error ? '#B91C1C' : '#E5E5E5'}`,
-                borderRadius: '6px', background: '#ffffff', overflow: 'hidden',
+                border: `1px solid ${regMatric.touched && regMatric.error ? '#B91C1C' : 'var(--border-color)'}`,
+                borderRadius: '6px', background: 'var(--bg-card)', overflow: 'hidden',
               }"
             >
-              <span style="padding: 0 12px; height: 44px; display: flex; align-items: center; background: #F9F9F9; border-right: 1px solid #E5E5E5; font-size: 13px; color: #555555; white-space: nowrap; font-family: 'JetBrains Mono', monospace">
+              <span style="padding: 0 12px; height: 44px; display: flex; align-items: center; background: var(--bg-pill); border-right: 1px solid var(--border-color); font-size: 13px; color: var(--text-secondary); white-space: nowrap; font-family: 'JetBrains Mono', monospace">
                 UTM
               </span>
               <input
@@ -335,7 +535,7 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
                 :value="regMatric.value"
                 @input="setVal(regMatric, $event.target.value.toUpperCase())"
                 @blur="touch(regMatric); if (!regMatric.value) setErr(regMatric, 'Matric number is required'); else if (!/^A\d{2}[A-Z]{2}\d{4}$/.test(regMatric.value)) setErr(regMatric, 'Format: A24AB1234')"
-                style="flex: 1; height: 44px; padding: 0 12px; background: transparent; border: none; outline: none; font-size: 14px; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.05em; color: #1a1a1a"
+                style="flex: 1; height: 44px; padding: 0 12px; background: transparent; border: none; outline: none; font-size: 14px; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.05em; color: var(--text-primary)"
               />
             </div>
             <p v-if="regMatric.touched && regMatric.error" class="auth-field-error">
@@ -346,7 +546,7 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
 
           <!-- Email -->
           <div style="margin-bottom: 16px">
-            <label style="display: block; font-size: 13px; font-weight: 500; color: #1a1a1a; margin-bottom: 6px">Email address</label>
+            <label style="display: block; font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px">Email address</label>
             <AuthInputWrap :error="regEmail.error" :touched="regEmail.touched">
               <Mail :size="16" class="auth-input-icon" />
               <input
@@ -364,7 +564,7 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
 
           <!-- Password -->
           <div style="margin-bottom: 16px">
-            <label style="display: block; font-size: 13px; font-weight: 500; color: #1a1a1a; margin-bottom: 6px">Password</label>
+            <label style="display: block; font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px">Password</label>
             <AuthInputWrap :error="regPw.error" :touched="regPw.touched">
               <Lock :size="16" class="auth-input-icon" />
               <input
@@ -391,7 +591,7 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
                 v-for="i in 3" :key="i"
                 :style="{
                   flex: 1, height: '3px', borderRadius: '2px',
-                  background: (i - 1) < pwScore(regPw.value) ? pwColors[pwScore(regPw.value)] : '#E5E5E5',
+                  background: (i - 1) < pwScore(regPw.value) ? pwColors[pwScore(regPw.value)] : 'var(--border-color)',
                   transition: 'background 200ms',
                 }"
               />
@@ -413,7 +613,7 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
 
           <!-- Confirm password -->
           <div style="margin-bottom: 16px">
-            <label style="display: block; font-size: 13px; font-weight: 500; color: #1a1a1a; margin-bottom: 6px">Confirm password</label>
+            <label style="display: block; font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px">Confirm password</label>
             <AuthInputWrap :error="regConfirm.error" :touched="regConfirm.touched">
               <Lock :size="16" class="auth-input-icon" />
               <input
@@ -433,7 +633,7 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
             </p>
           </div>
 
-          <p style="font-size: 12px; color: #555555; margin-bottom: 20px; line-height: 1.6">
+          <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.6">
             By creating an account you agree to EventOra's
             <button type="button" class="auth-link">Terms of Service</button>
             and
@@ -451,19 +651,65 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
             <button type="button" @click="tab = 'login'" class="auth-link auth-link--bold">Log in</button>
           </p>
         </form>
+
+        <!-- ── FORGOT PASSWORD FORM ── -->
+        <form v-else-if="tab === 'forgot'" @submit="handleForgot" style="padding: 24px" novalidate>
+
+          <!-- General Error Alert -->
+          <div v-if="generalError" style="background: #FFF5F5; border: 1px solid #B91C1C; border-radius: 8px; padding: 12px; margin-bottom: 20px; color: #B91C1C; font-size: 13px; display: flex; align-items: center; gap: 8px">
+            <AlertCircle :size="16" />
+            <span>{{ generalError }}</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px">
+            <div style="width: 44px; height: 44px; border-radius: 10px; background: linear-gradient(135deg, #fee2e2, #fecaca); display: flex; align-items: center; justify-content: center; flex-shrink: 0">
+              <KeyRound :size="20" style="color: #dc2626" />
+            </div>
+            <div>
+              <h3 style="margin: 0; font-size: 15px; font-weight: 600; color: #1a1a1a">Reset your password</h3>
+              <p style="margin: 2px 0 0; font-size: 13px; color: #555">Enter your UTM email and we'll send a reset link.</p>
+            </div>
+          </div>
+
+          <!-- Email -->
+          <div style="margin-bottom: 20px">
+            <label style="display: block; font-size: 13px; font-weight: 500; color: #1a1a1a; margin-bottom: 6px">Email address</label>
+            <AuthInputWrap :error="forgotEmail.error" :touched="forgotEmail.touched">
+              <Mail :size="16" class="auth-input-icon" :class="{ 'auth-input-icon--error': forgotEmail.touched && forgotEmail.error }" />
+              <input
+                type="email" placeholder="you@graduate.utm.my"
+                :value="forgotEmail.value"
+                @input="setVal(forgotEmail, $event.target.value)"
+                @blur="touch(forgotEmail); if (forgotEmail.value) setErr(forgotEmail, validateEmail(forgotEmail.value))"
+                class="auth-input"
+              />
+            </AuthInputWrap>
+            <p v-if="forgotEmail.touched && forgotEmail.error" class="auth-field-error">
+              <AlertCircle :size="12" /> {{ forgotEmail.error }}
+            </p>
+          </div>
+
+          <button type="submit" :disabled="submitting" class="auth-submit-btn" :class="{ 'auth-submit-btn--loading': submitting }">
+            <span v-if="submitting" class="auth-spinner" /> {{ submitting ? "Sending…" : "" }}
+            <template v-if="!submitting">Send reset link <ChevronRight :size="16" /></template>
+          </button>
+
+          <p style="text-align: center; font-size: 13px; color: #555555; margin-top: 20px">
+            Remembered your password?
+            <button type="button" @click="tab = 'login'; submitted = false; generalError = ''" class="auth-link auth-link--bold">Back to log in</button>
+          </p>
+        </form>
+
+        <!-- Google hidden sign-in iframe trigger container -->
+        <div id="google-hidden-btn-container" style="display: none !important;"></div>
       </div>
     </div>
   </Teleport>
 </template>
 
-<!-- AuthInputWrap is used inline as a layout wrapper in the template above.
-     Since Vue 3 doesn't support inline sub-components in SFCs, we declare it
-     here as a global-ish component via defineOptions or just use a div pattern.
-     We use a renderless wrapper approach via a simple slot div instead. -->
+<!-- AuthInputWrap is used inline as a layout wrapper in the template above. -->
 <script>
-// AuthInputWrap: reusable input container used above
-// (declared at module scope so the template can reference it)
-import { defineComponent, h, computed } from "vue";
+import { defineComponent, h } from "vue";
 
 const AuthInputWrap = defineComponent({
   name: "AuthInputWrap",
@@ -481,9 +727,9 @@ const AuthInputWrap = defineComponent({
             position: "relative",
             display: "flex",
             alignItems: "center",
-            border: `1px solid ${hasError ? "#B91C1C" : "#E5E5E5"}`,
+            border: `1px solid ${hasError ? "#B91C1C" : "var(--border-color)"}`,
             borderRadius: "6px",
-            background: hasError ? "#FFF5F5" : "#ffffff",
+            background: hasError ? "var(--maroon-light)" : "var(--bg-card)",
             boxShadow: hasError ? "0 0 0 3px rgba(185,28,28,0.08)" : "none",
             transition: "all 150ms ease",
           },
@@ -502,7 +748,7 @@ export default { components: { AuthInputWrap } };
   background: none;
   border: none;
   cursor: pointer;
-  color: #555555;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -511,7 +757,7 @@ export default { components: { AuthInputWrap } };
   border-radius: 6px;
   transition: background 150ms;
 }
-.auth-close-btn:hover { background: #f9f9f9; }
+.auth-close-btn:hover { background: var(--bg-hover); }
 
 .auth-input {
   flex: 1;
@@ -522,12 +768,12 @@ export default { components: { AuthInputWrap } };
   border: none;
   outline: none;
   font-size: 14px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 .auth-input-icon {
   position: absolute;
   left: 12px;
-  color: #aaaaaa;
+  color: var(--text-secondary);
 }
 .auth-input-icon--error { color: #b91c1c; }
 
@@ -537,7 +783,7 @@ export default { components: { AuthInputWrap } };
   background: none;
   border: none;
   cursor: pointer;
-  color: #555555;
+  color: var(--text-secondary);
   display: flex;
   padding: 0;
 }
@@ -555,7 +801,7 @@ export default { components: { AuthInputWrap } };
   background: none;
   border: none;
   font-size: 13px;
-  color: #520000;
+  color: var(--maroon);
   cursor: pointer;
   font-weight: 500;
   padding: 0;
@@ -565,7 +811,7 @@ export default { components: { AuthInputWrap } };
 .auth-submit-btn {
   width: 100%;
   height: 44px;
-  background: #520000;
+  background: var(--maroon);
   color: #ffffff;
   border: none;
   border-radius: 8px;
@@ -579,8 +825,8 @@ export default { components: { AuthInputWrap } };
   transition: background 150ms;
   font-family: inherit;
 }
-.auth-submit-btn:hover:not(:disabled) { background: #3a0000; }
-.auth-submit-btn--loading { background: #7a1010; cursor: not-allowed; }
+.auth-submit-btn:hover:not(:disabled) { background: var(--maroon-hover); }
+.auth-submit-btn--loading { background: var(--maroon-hover); cursor: not-allowed; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 .auth-spinner {
@@ -596,12 +842,12 @@ export default { components: { AuthInputWrap } };
 .auth-google-btn {
   width: 100%;
   height: 44px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--bg-card);
   font-size: 14px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: var(--text-primary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -610,5 +856,14 @@ export default { components: { AuthInputWrap } };
   transition: border-color 150ms, background 150ms;
   font-family: inherit;
 }
-.auth-google-btn:hover { background: #f9f9f9; }
+.auth-google-btn:hover { background: var(--bg-hover); }
+
+/* Hide scrollbars for clean aesthetics */
+.modal-no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.modal-no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 </style>
