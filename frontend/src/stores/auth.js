@@ -123,14 +123,20 @@ export const useAuthStore = defineStore("auth", {
     },
 
     /**
-     * Register a new account. On success the backend returns HTTP 202 with a
-     * message (not a token) — the user must verify their email before logging in.
-     * Returns the message string so the modal can display it.
+     * Register a new account. The backend auto-verifies and returns a JWT +
+     * user, so we log the user straight in and return null (the modal treats
+     * null as "signed in"). If a build ever re-enables email verification it
+     * returns a message string instead, which we pass back for display.
      */
     async register(name, email, password, matricNo = "") {
       try {
         const data = await registerRequest({ name, email, password, matricNo });
-        // data.message = "Check your UTM email…" — no user/token yet
+        if (data.token) {
+          this.user = data.user;
+          this.token = data.token;
+          localStorage.setItem("eventora_token", data.token);
+          return null; // signed in immediately
+        }
         return data.message ?? "Account created! Please check your email.";
       } catch (err) {
         // A real deployment must surface the failure, not fake a signup.

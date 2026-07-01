@@ -95,25 +95,23 @@ class AuthController
 
         $pdo = Connection::get();
 
-        $existing = $pdo->prepare('SELECT id, email_verified FROM users WHERE email = ?');
+        $existing = $pdo->prepare('SELECT id FROM users WHERE email = ?');
         $existing->execute([$data['email']]);
-        $row = $existing->fetch();
-
-        if ($row) {
-            if ((int) $row['email_verified'] === 0) {
-                // Account exists but is unverified — resend verification email
-                return $this->resendVerification($pdo, $response, $data['email']);
-            }
+        if ($existing->fetch()) {
             return JsonResponse::error($response, 'An account with this email already exists.', 409);
         }
 
-        $hash  = password_hash($data['password'], PASSWORD_BCRYPT);
-        $token = $this->generateToken();
-        $expiry = date('Y-m-d H:i:s', strtotime('+24 hours'));
+        $hash = password_hash($data['password'], PASSWORD_BCRYPT);
 
+        // Accounts are active immediately. Email verification is disabled
+        // because there's no free way to deliver verification mail to
+        // arbitrary addresses without a verified sending domain — so
+        // email_verified = 1 and we hand back a JWT to log the user straight
+        // in. (Mailer/verifyEmail are kept intact for when a domain is
+        // verified and the gate can be turned back on.)
         $stmt = $pdo->prepare(
-            'INSERT INTO users (name, email, password_hash, role, matric_no, email_verified, verify_token, verify_token_expiry)
-             VALUES (?, ?, ?, ?, ?, 0, ?, ?)'
+            'INSERT INTO users (name, email, password_hash, role, matric_no, email_verified)
+             VALUES (?, ?, ?, ?, ?, 1)'
         );
         $stmt->execute([
             $data['name'],
@@ -121,21 +119,15 @@ class AuthController
             $hash,
             'attendee',
             $data['matricNo'] ?? null,
-            $token,
-            $expiry,
         ]);
 
-        $verifyUrl = $this->apiUrl() . '/auth/verify-email?token=' . $token;
-
-        try {
-            Mailer::sendVerification($data['email'], $data['name'], $verifyUrl);
-        } catch (\Throwable) {
-            // SMTP failure must not block account creation
-        }
+        $user = $this->findUserById($pdo, (int) $pdo->lastInsertId());
+        $token = JwtHelper::issue($user);
 
         return JsonResponse::send($response, [
-            'message' => 'Account created! Please check your UTM email and click the verification link to activate your account.',
-        ], 202);
+            'token' => $token,
+            'user'  => $this->publicUser($user),
+        ], 201);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
