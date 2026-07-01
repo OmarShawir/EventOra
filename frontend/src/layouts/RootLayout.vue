@@ -66,22 +66,22 @@ function openSignup() {
 }
 
 const loggingOut = ref(false);
-const loggingIn = ref(false);
 
 async function handleLogout() {
+  // Brief branded overlay, then clear state and land on the public home
+  // page. Navigate first so the protected page we're leaving doesn't flash
+  // its logged-out empty state during the transition.
   loggingOut.value = true;
-  await new Promise((resolve) => setTimeout(resolve, 600));
+  router.push("/");
+  await new Promise((resolve) => setTimeout(resolve, 350));
   auth.logout();
   loggingOut.value = false;
-  router.push("/");
 }
 
-// Route the user to the discover page after a successful login.
-async function handleAuthSuccess(u) {
+// The modal already shows its own "Welcome back!" confirmation, so just
+// close it and route to the discover page — no second loading overlay.
+function handleAuthSuccess() {
   authOpen.value = false;
-  loggingIn.value = true;
-  await new Promise((resolve) => setTimeout(resolve, 800));
-  loggingIn.value = false;
   router.push("/");
 }
 
@@ -118,14 +118,6 @@ async function handleAuthSuccess(u) {
         <p style="font-size: 15px; font-weight: 500; color: var(--text-primary)">Logging you out safely…</p>
       </div>
     </transition>
-
-    <!-- Login Overlay -->
-    <transition name="fade">
-      <div v-if="loggingIn" style="position: fixed; inset: 0; background: var(--bg-modal); z-index: 999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; backdrop-filter: blur(8px)">
-        <div class="login-spinner" />
-        <p style="font-size: 15px; font-weight: 500; color: var(--text-primary)">Authenticating securely…</p>
-      </div>
-    </transition>
   </div>
 </template>
 
@@ -159,8 +151,7 @@ async function handleAuthSuccess(u) {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
-.logout-spinner,
-.login-spinner {
+.logout-spinner {
   width: 32px;
   height: 32px;
   border: 3px solid var(--maroon-light);
