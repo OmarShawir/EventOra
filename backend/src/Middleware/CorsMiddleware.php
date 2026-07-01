@@ -18,11 +18,18 @@ class CorsMiddleware implements MiddlewareInterface
     public function process(Request $request, Handler $handler): Response
     {
         $origin = $request->getHeaderLine('Origin');
-        $allowed = array_map('trim', explode(',', getenv('CORS_ALLOWED_ORIGINS') ?: ''));
+
+        // Normalise trailing slashes on both sides: browsers send the Origin
+        // header without one (e.g. "https://app.vercel.app"), but the value
+        // pasted into CORS_ALLOWED_ORIGINS often has one ("…app/"). Comparing
+        // raw strings would then never match and silently block the frontend.
+        $normalise = static fn(string $o): string => rtrim(trim($o), '/');
+        $requestOrigin = $normalise($origin);
+        $allowed = array_map($normalise, explode(',', getenv('CORS_ALLOWED_ORIGINS') ?: ''));
 
         $response = $handler->handle($request);
 
-        if ($origin && in_array($origin, $allowed, true)) {
+        if ($origin && in_array($requestOrigin, $allowed, true)) {
             $response = $response
                 ->withHeader('Access-Control-Allow-Origin', $origin)
                 ->withHeader('Access-Control-Allow-Credentials', 'true');
