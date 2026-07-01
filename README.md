@@ -17,7 +17,7 @@ A full-stack campus event management and ticketing platform built for Universiti
 
 ---
 
-## Team
+## Team 
 
 | Name | Matric | Role |
 |---|---|---|
