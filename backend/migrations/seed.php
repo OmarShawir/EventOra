@@ -14,25 +14,21 @@
  * Safe to re-run — it truncates existing data first.
  */
 
-require __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
 use App\Env;
 
-Env::load(__DIR__ . '/../.env');
+// Reuse the existing $pdo connection when required from migrate.php;
+// otherwise load .env and connect standalone (php migrations/seed.php).
+if (!isset($pdo)) {
+    Env::load(__DIR__ . '/../.env');
+    $pdo = \App\Database\Connection::get();
+}
 
-$pdo = new PDO(
-    sprintf(
-        'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
-        getenv('DB_HOST') ?: 'localhost',
-        getenv('DB_PORT') ?: '3306',
-        getenv('DB_NAME') ?: 'eventora'
-    ),
-    getenv('DB_USER') ?: 'root',
-    getenv('DB_PASS') ?: '',
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-);
+$isWeb = (php_sapi_name() !== 'cli');
+$nl = $isWeb ? "<br>\n" : "\n";
 
-echo "Connected to database.\n";
+echo "Connected to database.{$nl}";
 
 // ── Reset tables (children first, to respect FK constraints) ───────────────
 $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
@@ -40,7 +36,7 @@ foreach (['checkins', 'feedback', 'tickets', 'events', 'societies', 'users'] as 
     $pdo->exec("TRUNCATE TABLE {$table}");
 }
 $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
-echo "Cleared existing data.\n";
+echo "Cleared existing data.{$nl}";
 
 // ── Demo users (one per role, matching the frontend's DEMO_USERS) ──────────
 $demoPasswordHash = password_hash('password123', PASSWORD_BCRYPT);
@@ -58,7 +54,7 @@ $organiserId = (int) $pdo->lastInsertId();
 $insertUser->execute(['Prof. Dr. Razali', 'admin@utm.my', $demoPasswordHash, 'admin', null]);
 $adminId = (int) $pdo->lastInsertId();
 
-echo "Seeded 3 demo users (password for all: password123).\n";
+echo "Seeded 3 demo users (password for all: password123).{$nl}";
 
 // ── Societies ────────────────────────────────────────────────────────────
 $societiesJson = json_decode(file_get_contents(__DIR__ . '/seed_societies.json'), true);
@@ -82,7 +78,7 @@ foreach ($societiesJson as $name => $meta) {
     ]);
     $societyIds[$name] = (int) $pdo->lastInsertId();
 }
-echo 'Seeded ' . count($societyIds) . " societies.\n";
+echo 'Seeded ' . count($societyIds) . " societies.{$nl}";
 
 // ── Events ───────────────────────────────────────────────────────────────
 $eventsJson = json_decode(file_get_contents(__DIR__ . '/seed_events.json'), true);
@@ -105,7 +101,7 @@ $eventCount = 0;
 foreach ($eventsJson as $ev) {
     $societyId = $societyIds[$ev['societyName']] ?? null;
     if ($societyId === null) {
-        echo "  WARNING: skipping '{$ev['title']}' — unknown society '{$ev['societyName']}'\n";
+        echo "  WARNING: skipping '{$ev['title']}' — unknown society '{$ev['societyName']}'{$nl}";
         continue;
     }
 
@@ -133,9 +129,9 @@ foreach ($eventsJson as $ev) {
     ]);
     $eventCount++;
 }
-echo "Seeded {$eventCount} events.\n";
+echo "Seeded {$eventCount} events.{$nl}";
 
-echo "\nDone. Demo login credentials (password for all: password123):\n";
-echo "  attendee@utm.my\n";
-echo "  organiser@utm.my\n";
-echo "  admin@utm.my\n";
+echo "{$nl}Done. Demo login credentials (password for all: password123):{$nl}";
+echo "  attendee@utm.my{$nl}";
+echo "  organiser@utm.my{$nl}";
+echo "  admin@utm.my{$nl}";
