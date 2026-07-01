@@ -8,6 +8,13 @@ import {
   googleLoginRequest,
 } from "@/api/auth";
 
+// Mock mode is active only when no real API base URL is configured (local
+// frontend dev without a backend). When VITE_API_BASE_URL *is* set (i.e. a
+// real deployment), a failed auth request must surface as a real error —
+// never silently fall back to a fake demo/guest session, which would hide
+// backend/CORS outages and log people in as no one.
+const MOCK_MODE = !import.meta.env.VITE_API_BASE_URL;
+
 // Demo accounts so the team can log in instantly during testing/demo
 // without needing the real backend yet. Matches the USER entity roles:
 // attendee | organiser | admin
@@ -77,11 +84,13 @@ export const useAuthStore = defineStore("auth", {
         this.token = data.token;
         localStorage.setItem("eventora_token", data.token);
       } catch (err) {
+        // A real deployment must never silently fake a login — propagate.
+        if (!MOCK_MODE) throw err;
         // If it's a real error from a running backend, propagate it
         if (err.response && err.response.status >= 400 && err.response.status < 500) {
           throw err;
         }
-        // Otherwise, backend is down — fall back to demo accounts
+        // Local mock mode only — fall back to demo accounts
         console.warn("[auth store] login API call failed, using demo account:", err.message);
         const matched = DEMO_USERS[email.toLowerCase()];
         if (matched) {
@@ -101,6 +110,7 @@ export const useAuthStore = defineStore("auth", {
         this.token = data.token;
         localStorage.setItem("eventora_token", data.token);
       } catch (err) {
+        if (!MOCK_MODE) throw err;
         if (err.response && err.response.status >= 400 && err.response.status < 500) {
           throw err;
         }
@@ -123,10 +133,12 @@ export const useAuthStore = defineStore("auth", {
         // data.message = "Check your UTM email…" — no user/token yet
         return data.message ?? "Account created! Please check your email.";
       } catch (err) {
+        // A real deployment must surface the failure, not fake a signup.
+        if (!MOCK_MODE) throw err;
         if (err.response && err.response.status >= 400 && err.response.status < 500) {
           throw err;
         }
-        // Backend down — fall back to creating a guest session for demo purposes
+        // Local mock mode only — create a guest session for demo purposes
         console.warn("[auth store] register API call failed, creating guest user:", err.message);
         this.user = deriveGuestUser(email, "attendee");
         this.token = "mock-token-for-demo";
