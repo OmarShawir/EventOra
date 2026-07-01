@@ -32,3 +32,26 @@ export function rejectEventRequest(id) {
 export function cancelEventRequest(id) {
   return api.post(`/events/${id}/cancel`).then((res) => res.data);
 }
+
+export function uploadEventImage(file) {
+  const formData = new FormData();
+  formData.append("image", file);
+  return api.post("/upload", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  }).then((res) => res.data);
+}
+
+export function fetchEventParticipants(id) {
+  return api.get(`/events/${id}/participants`).then((res) => res.data);
+}
+
+export function fetchPendingEvents() {
+  return api.get("/events/pending").then((res) => res.data);
+}
+
+export function fetchMyEvents() {
+  return api.get("/events/mine").then((res) => res.data);
+}
+
