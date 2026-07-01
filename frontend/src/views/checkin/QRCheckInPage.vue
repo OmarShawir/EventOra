@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from "vue";
+import { ref, onBeforeUnmount } from "vue";
+import QrScanner from "qr-scanner";
 import { Camera, CheckCircle2, XCircle, RotateCcw, Clock } from "lucide-vue-next";
 import { useTicketsStore } from "@/stores/tickets";
 
@@ -8,20 +9,66 @@ const ticketsStore = useTicketsStore();
 const scanState = ref("idle"); // idle | scanning | success | error | duplicate
 const result = ref(null);
 const manualCode = ref("");
-const cameraGranted = ref(false);
+const cameraGranted = ref(false); // permission flow done — show viewfinder + manual entry
+const cameraActive = ref(false); // real camera feed is running
+const cameraError = ref("");
 const recentScans = ref([]);
+const videoEl = ref(null);
+let scanner = null;
 let scanTimeout = null;
+let lastDecoded = { code: "", at: 0 };
 
 async function requestCamera() {
+  cameraGranted.value = true; // reveal the viewfinder + manual entry either way
+  cameraError.value = "";
+
+  if (!navigator.mediaDevices?.getUserMedia || !(await QrScanner.hasCamera())) {
+    cameraError.value = "No camera available on this device — use manual entry below.";
+    return;
+  }
+
   try {
-    await navigator.mediaDevices.getUserMedia({ video: true });
-    cameraGranted.value = true;
-  } catch {
-    // In dev/demo environments without camera hardware, simulate granted
-    // so the team can still test the check-in flow.
-    cameraGranted.value = true;
+    // Wait a tick so the <video> is rendered before QrScanner binds to it.
+    await new Promise((r) => setTimeout(r, 0));
+    scanner = new QrScanner(videoEl.value, (res) => onDecoded(res.data), {
+      preferredCamera: "environment", // rear camera on phones
+      highlightScanRegion: true,
+      highlightCodeOutline: true,
+      returnDetailedScanResult: true,
+    });
+    await scanner.start();
+    cameraActive.value = true;
+  } catch (err) {
+    // Permission denied / no hardware / insecure context — fall back to
+    // manual entry and the simulate button rather than dead-ending.
+    cameraActive.value = false;
+    cameraError.value =
+      "Couldn't start the camera (permission denied or unsupported). Use manual entry below.";
   }
 }
+
+// Feeds a camera-decoded QR into the same check-in path as manual entry,
+// debounced so one physical scan doesn't fire repeatedly while the code
+// stays in frame.
+function onDecoded(code) {
+  const now = Date.now();
+  if (scanState.value !== "idle") return;
+  if (code === lastDecoded.code && now - lastDecoded.at < 2500) return;
+  lastDecoded = { code, at: now };
+  manualCode.value = code;
+  doScan(code);
+}
+
+function stopScanner() {
+  if (scanner) {
+    scanner.stop();
+    scanner.destroy();
+    scanner = null;
+  }
+  cameraActive.value = false;
+}
+
+onBeforeUnmount(stopScanner);
 
 function doScan(code) {
   if (!code.trim()) return;
@@ -125,7 +172,15 @@ const cornerPositions = [
 
       <!-- Camera viewfinder -->
       <div v-else style="position:relative;background:#000;border-radius:16px;overflow:hidden;margin-bottom:24px;aspect-ratio:4/3">
-        <div style="position:absolute;inset:0;background:linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 50%,#0a0a0a 100%);display:flex;align-items:center;justify-content:center">
+        <!-- Real camera feed (shown once the scanner starts) -->
+        <video ref="videoEl" v-show="cameraActive" playsinline muted
+          style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"/>
+
+        <!-- Placeholder shown when there's no live feed (no camera / denied) -->
+        <div v-if="!cameraActive" style="position:absolute;inset:0;background:linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 50%,#0a0a0a 100%)"/>
+
+        <!-- Scan-region frame + status, overlaid on top of the feed -->
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
           <div style="text-align:center">
             <div style="position:relative;display:inline-block">
               <div style="width:200px;height:200px;border:2px solid rgba(255,255,255,0.3);border-radius:12px;position:relative;overflow:hidden">
@@ -141,16 +196,22 @@ const cornerPositions = [
                 </div>
               </div>
             </div>
-            <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:12px">
-              {{ scanState==='idle' ? 'Point camera at QR code' : scanState==='scanning' ? 'Scanning…' : scanState==='success' ? '✓ Check-in recorded' : '✗ Invalid QR' }}
+            <p style="font-size:12px;color:rgba(255,255,255,0.55);margin-top:12px;text-shadow:0 1px 3px rgba(0,0,0,0.8)">
+              {{ scanState==='scanning' ? 'Scanning…' : scanState==='success' ? '✓ Check-in recorded' : (scanState==='error'||scanState==='duplicate') ? '✗ Invalid QR' : cameraActive ? 'Point camera at QR code' : 'Camera unavailable' }}
             </p>
           </div>
         </div>
+
         <button v-if="scanState==='idle'" @click="simulateScan"
           style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(82,0,0,0.85);color:#fff;border:1px solid #7A1010;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;backdrop-filter:blur(4px);white-space:nowrap;font-family:inherit">
           Simulate QR Scan
         </button>
       </div>
+
+      <!-- Camera error / hint -->
+      <p v-if="cameraGranted && cameraError" style="font-size:12px;color:#C17070;margin:-12px 0 20px;text-align:center;line-height:1.5">
+        {{ cameraError }}
+      </p>
 
       <!-- Result card -->
       <div v-if="result" :style="{ background: result.ok ? '#0A2A1A' : '#2A0A0A', border:`1px solid ${result.ok ? '#1A7A4A' : '#B91C1C'}`, borderRadius:'12px', padding:'20px', marginBottom:'20px' }">
