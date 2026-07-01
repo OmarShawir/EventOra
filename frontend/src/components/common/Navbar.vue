@@ -357,26 +357,36 @@ function toggleDarkMode() {
         </template>
       </div>
 
-      <!-- Mobile hamburger -->
-      <button
-        class="md:hidden"
-        @click="drawerOpen = true"
-        style="background: none; border: none; cursor: pointer; color: #1a1a1a; display: flex; align-items: center; padding: 8px"
-      >
-        <Menu :size="22" />
-      </button>
+      <!-- Mobile hamburger and theme toggle -->
+      <div class="md:hidden" style="display: flex; align-items: center; gap: 8px">
+        <!-- Theme Toggle -->
+        <button
+          @click="toggleDarkMode"
+          style="background: none; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; transition: all 150ms ease"
+          aria-label="Toggle Dark Mode"
+        >
+          <Sun v-if="isDark" :size="18" />
+          <Moon v-else :size="18" />
+        </button>
+        <button
+          @click="drawerOpen = true"
+          style="background: none; border: none; cursor: pointer; color: var(--text-primary); display: flex; align-items: center; padding: 8px"
+        >
+          <Menu :size="22" />
+        </button>
+      </div>
     </div>
   </nav>
 
   <!-- Mobile drawer -->
   <div v-if="drawerOpen" style="position: fixed; inset: 0; z-index: 100">
     <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.4)" @click="drawerOpen = false" />
-    <div style="position: absolute; top: 0; left: 0; bottom: 0; width: 280px; background: #fff; padding: 24px; display: flex; flex-direction: column">
+    <div style="position: absolute; top: 0; left: 0; bottom: 0; width: 280px; background: var(--bg-surface); border-right: 1px solid var(--border-color); padding: 24px; display: flex; flex-direction: column">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px">
         <span style="font-size: 20px; font-weight: 700">
-          <span style="color: #1a1a1a">Event</span><span style="color: #520000">Ora</span>
+          <span style="color: var(--text-primary)">Event</span><span style="color: var(--maroon)">Ora</span>
         </span>
-        <button @click="drawerOpen = false" style="background: none; border: none; cursor: pointer; color: #555555">
+        <button @click="drawerOpen = false" style="background: none; border: none; cursor: pointer; color: var(--text-secondary)">
           <X :size="22" />
         </button>
       </div>
@@ -395,8 +405,8 @@ function toggleDarkMode() {
           padding: '14px 0',
           fontSize: '16px',
           fontWeight: isActive(link.path) ? 600 : 400,
-          color: isActive(link.path) ? '#520000' : '#555555',
-          borderBottom: '1px solid #E5E5E5',
+          color: isActive(link.path) ? 'var(--maroon)' : 'var(--text-secondary)',
+          borderBottom: '1px solid var(--border-color)',
           width: '100%',
           textAlign: 'left',
         }"
@@ -408,20 +418,20 @@ function toggleDarkMode() {
         <button
           v-if="user"
           @click="handleLogoutMobile"
-          style="height: 44px; border: 1px solid #E5E5E5; border-radius: 6px; background: none; font-size: 14px; font-weight: 500; color: #B91C1C; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px"
+          style="height: 44px; border: 1px solid var(--border-color); border-radius: 6px; background: none; font-size: 14px; font-weight: 500; color: #B91C1C; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px"
         >
           <LogOut :size="16" /> Sign out
         </button>
         <template v-else>
           <button
             @click="drawerOpen = false; emit('login-click')"
-            style="height: 44px; border: 1px solid #E5E5E5; border-radius: 6px; background: none; font-size: 14px; font-weight: 500; color: #1a1a1a; cursor: pointer"
+            style="height: 44px; border: 1px solid var(--border-color); border-radius: 6px; background: none; font-size: 14px; font-weight: 500; color: var(--text-primary); cursor: pointer"
           >
             Log in
           </button>
           <button
             @click="drawerOpen = false; emit('signup-click')"
-            style="height: 44px; border: none; border-radius: 6px; background: #520000; font-size: 14px; font-weight: 500; color: #fff; cursor: pointer"
+            style="height: 44px; border: none; border-radius: 6px; background: var(--maroon); font-size: 14px; font-weight: 500; color: #fff; cursor: pointer"
           >
             Sign up
           </button>
