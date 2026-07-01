@@ -1,3 +1,4 @@
+-- Active: 1782901936182@@shuttle.proxy.rlwy.net@33340@railway
 -- EventOra database schema
 -- Mirrors the ER diagram in the PR1 proposal (section 6) exactly:
 -- USER, SOCIETY, EVENT, TICKET, CHECKIN, FEEDBACK + their FK relationships.
