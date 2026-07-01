@@ -119,7 +119,7 @@ eventora/
 ---
 
 ## Quick Start
-
+ 
 ### Frontend
 
 ```bash
