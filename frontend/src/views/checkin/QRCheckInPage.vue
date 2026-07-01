@@ -49,8 +49,12 @@ async function requestCamera() {
       highlightCodeOutline: true,
       returnDetailedScanResult: true,
     });
-    await scanner.start();
+    // Un-hide the <video> BEFORE starting. iOS Safari renders a permanent
+    // black frame if play() runs while the element is display:none (which
+    // v-show applies), so make it visible and let Vue flush that first.
     cameraActive.value = true;
+    await nextTick();
+    await scanner.start();
   } catch (err) {
     // Surface the real reason so permission vs hardware vs busy is obvious.
     cameraActive.value = false;
@@ -192,9 +196,10 @@ const cornerPositions = [
 
       <!-- Camera viewfinder -->
       <div v-else style="position:relative;background:#000;border-radius:16px;overflow:hidden;margin-bottom:24px;aspect-ratio:4/3">
-        <!-- Real camera feed (shown once the scanner starts) -->
-        <video ref="videoEl" v-show="cameraActive" playsinline muted
-          style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"/>
+        <!-- Real camera feed (shown once the scanner starts). playsinline +
+             muted + autoplay are all required for iOS Safari to render it. -->
+        <video ref="videoEl" v-show="cameraActive" playsinline muted autoplay
+          style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000"/>
 
         <!-- Placeholder shown when there's no live feed (no camera / denied) -->
         <div v-if="!cameraActive" style="position:absolute;inset:0;background:linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 50%,#0a0a0a 100%)"/>
