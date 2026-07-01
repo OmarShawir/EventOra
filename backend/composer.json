@@ -1,0 +1,26 @@
+{
+    "name": "eventora/api",
+    "description": "EventOra backend API — SCSM2223 Cross-Platform Application Development",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": "^8.1",
+        "firebase/php-jwt": "^6.10",
+        "slim/psr7": "^1.7",
+        "slim/slim": "^4.14",
+        "stripe/stripe-php": "^20.3",
+        "vlucas/phpdotenv": "^5.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "scripts": {
+        "start": "php -S localhost:8080 -t public"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}
