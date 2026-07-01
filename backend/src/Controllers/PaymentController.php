@@ -74,12 +74,12 @@ class PaymentController
                 'payment_method_types' => ['card'],
                 'line_items' => [[
                     'price_data' => [
-                        'currency' => 'usd',
+                        'currency' => 'myr',
                         'product_data' => [
                             'name' => $event['title'],
                             'description' => 'Ticket for ' . $event['title'] . ' at ' . $event['venue'],
                         ],
-                        'unit_amount' => (int) ($price * 100), // Stripe expects cents
+                        'unit_amount' => (int) ($price * 100), // Stripe expects the amount in sen (MYR's smallest unit)
                     ],
                     'quantity' => 1,
                 ]],
