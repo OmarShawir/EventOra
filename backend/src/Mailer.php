@@ -3,14 +3,15 @@
 namespace App;
 
 /**
- * Minimal SMTP mailer that uses raw PHP stream sockets.
+ * Email sender using the Resend HTTP API (https://resend.com).
  *
- * Requires no additional Composer dependencies — reads credentials
- * from the environment variables loaded by Env::load():
- *   EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS
- *
- * Sends over STARTTLS (port 587). For pure SSL (port 465), change
- * the socket prefix to "ssl://" and remove the STARTTLS handshake.
+ * Railway (and many other PaaS hosts) block outbound raw SMTP ports
+ * (25/465/587) to prevent spam abuse, so a socket-based SMTP mailer times
+ * out there. Resend delivers over plain HTTPS (port 443), which is never
+ * blocked. Reads config from environment variables loaded by Env::load():
+ *   RESEND_API_KEY  — your Resend API key (starts with "re_")
+ *   MAIL_FROM       — verified sender, e.g. "EventOra <no-reply@yourdomain>"
+ *                     (defaults to Resend's shared onboarding@resend.dev)
  */
 class Mailer
 {
@@ -20,9 +21,9 @@ class Mailer
     }
 
     /**
-     * Send a plain-text + HTML email via SMTP STARTTLS.
+     * Send a plain-text + HTML email via the Resend HTTP API.
      *
-     * @throws \RuntimeException if the SMTP conversation fails
+     * @throws \RuntimeException if the API call fails
      */
     public static function send(
         string $toEmail,
@@ -31,115 +32,50 @@ class Mailer
         string $htmlBody,
         string $textBody = ''
     ): void {
-        $host = self::env('EMAIL_HOST', 'smtp.gmail.com');
-        $port = (int) self::env('EMAIL_PORT', '587');
-        $user = self::env('EMAIL_USER');
-        $pass = self::env('EMAIL_PASS');
+        $apiKey = self::env('RESEND_API_KEY');
+        if ($apiKey === '') {
+            throw new \RuntimeException('RESEND_API_KEY is not configured.');
+        }
+
+        $from = self::env('MAIL_FROM', 'EventOra <onboarding@resend.dev>');
 
         if (!$textBody) {
             $textBody = strip_tags($htmlBody);
         }
 
-        $isSsl = ($port === 465);
-        $protocol = $isSsl ? 'ssl://' : 'tcp://';
-        
-        $context = stream_context_create([
-            'ssl' => [
-                'verify_peer' => false,
-                'verify_peer_name' => false,
-                'allow_self_signed' => true
-            ]
+        $payload = json_encode([
+            'from'    => $from,
+            'to'      => [$toEmail],
+            'subject' => $subject,
+            'html'    => $htmlBody,
+            'text'    => $textBody,
         ]);
-        $socket = @stream_socket_client($protocol . $host . ':' . $port, $errno, $errstr, 10, STREAM_CLIENT_CONNECT, $context);
-        if ($socket === false) {
-            throw new \RuntimeException("SMTP connect failed [{$errno}]: {$errstr}");
+
+        $ch = curl_init('https://api.resend.com/emails');
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_HTTPHEADER     => [
+                'Authorization: Bearer ' . $apiKey,
+                'Content-Type: application/json',
+            ],
+        ]);
+
+        $response = curl_exec($ch);
+        if ($response === false) {
+            $err = curl_error($ch);
+            curl_close($ch);
+            throw new \RuntimeException("Resend request failed: {$err}");
         }
 
-        $read = fn() => fgets($socket, 515);
-        $send = function (string $cmd) use ($socket): void {
-            fwrite($socket, $cmd . "\r\n");
-        };
+        $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
 
-        // ── SMTP handshake ────────────────────────────────────────────────────
-        $read(); // 220 banner
-
-        $send('EHLO localhost');
-        while (true) {
-            $line = $read();
-            if ($line === false || strlen($line) < 4 || $line[3] === ' ') {
-                break;
-            }
+        if ($status < 200 || $status >= 300) {
+            throw new \RuntimeException("Resend API returned HTTP {$status}: {$response}");
         }
-
-        if (!$isSsl) {
-            // Upgrade to TLS via STARTTLS
-            $send('STARTTLS');
-            $read(); // 220 Ready
-
-            if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
-                fclose($socket);
-                throw new \RuntimeException('STARTTLS crypto handshake failed.');
-            }
-
-            $send('EHLO localhost');
-            while (true) {
-                $line = $read();
-                if ($line === false || strlen($line) < 4 || $line[3] === ' ') {
-                    break;
-                }
-            }
-        }
-
-        // ── AUTH LOGIN ────────────────────────────────────────────────────────
-        $send('AUTH LOGIN');
-        $read(); // 334 Username:
-        $send(base64_encode($user));
-        $read(); // 334 Password:
-        $send(base64_encode($pass));
-        $resp = $read();
-        if (!str_starts_with(trim($resp), '235')) {
-            fclose($socket);
-            throw new \RuntimeException("SMTP AUTH failed: {$resp}");
-        }
-
-        // ── Envelope ─────────────────────────────────────────────────────────
-        $send("MAIL FROM:<{$user}>");
-        $read();
-        $send("RCPT TO:<{$toEmail}>");
-        $read();
-        $send('DATA');
-        $read(); // 354 Start input
-
-        // ── Build MIME message ────────────────────────────────────────────────
-        $boundary = 'b_' . bin2hex(random_bytes(8));
-        $date     = date('r');
-        $fromName = 'EventOra';
-
-        $headers  = "Date: {$date}\r\n";
-        $headers .= "From: {$fromName} <{$user}>\r\n";
-        $headers .= "To: {$toName} <{$toEmail}>\r\n";
-        $headers .= "Subject: {$subject}\r\n";
-        $headers .= "MIME-Version: 1.0\r\n";
-        $headers .= "Content-Type: multipart/alternative; boundary=\"{$boundary}\"\r\n";
-
-        $body  = "--{$boundary}\r\n";
-        $body .= "Content-Type: text/plain; charset=UTF-8\r\n\r\n";
-        $body .= $textBody . "\r\n";
-        $body .= "--{$boundary}\r\n";
-        $body .= "Content-Type: text/html; charset=UTF-8\r\n\r\n";
-        $body .= $htmlBody . "\r\n";
-        $body .= "--{$boundary}--\r\n";
-
-        fwrite($socket, $headers . "\r\n" . $body . "\r\n.\r\n");
-        $resp = $read(); // 250 OK
-        if (!str_starts_with(trim($resp), '250')) {
-            fclose($socket);
-            throw new \RuntimeException("SMTP DATA rejected: {$resp}");
-        }
-
-        $send('QUIT');
-        $read();
-        fclose($socket);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
