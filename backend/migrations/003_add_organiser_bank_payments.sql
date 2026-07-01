@@ -1,9 +1,9 @@
 -- Add bank details to user profiles for organisers
 ALTER TABLE users
-ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100) NULL,
-ADD COLUMN IF NOT EXISTS bank_account_no VARCHAR(50) NULL,
-ADD COLUMN IF NOT EXISTS bank_account_holder VARCHAR(150) NULL,
-ADD COLUMN IF NOT EXISTS stripe_connect_id VARCHAR(100) NULL;
+ADD COLUMN bank_name VARCHAR(100) NULL,
+ADD COLUMN bank_account_no VARCHAR(50) NULL,
+ADD COLUMN bank_account_holder VARCHAR(150) NULL,
+ADD COLUMN stripe_connect_id VARCHAR(100) NULL;
 
 -- Create payments logging table
 CREATE TABLE IF NOT EXISTS payments (

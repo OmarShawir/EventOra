@@ -50,25 +50,42 @@ try {
     
     echo "Connected successfully to database!<br>";
     flush();
-    
-    // 1. Run 001
-    echo "Running migration 001_create_schema.sql...<br>";
-    flush();
-    $sql1 = file_get_contents(__DIR__ . '/../migrations/001_create_schema.sql');
-    $pdo->exec($sql1);
-    
-    // 2. Run 002
-    echo "Running migration 002_add_verification_reset.sql...<br>";
-    flush();
-    $sql2 = file_get_contents(__DIR__ . '/../migrations/002_add_verification_reset.sql');
-    $pdo->exec($sql2);
-    
-    // 3. Run 003
-    echo "Running migration 003_add_organiser_bank_payments.sql...<br>";
-    flush();
-    $sql3 = file_get_contents(__DIR__ . '/../migrations/003_add_organiser_bank_payments.sql');
-    $pdo->exec($sql3);
-    
+
+    // Migrations must be safe to re-run against a DB that's already had some
+    // or all of them applied (e.g. a prior partial run). MySQL's "IF NOT
+    // EXISTS" clause for ADD COLUMN/INDEX needs 8.0.29+, which this server
+    // doesn't have, so instead we run each migration file and swallow the
+    // specific "already exists" MySQL error codes: 1050 (table exists),
+    // 1060 (duplicate column), 1061 (duplicate key/index name). Anything
+    // else still aborts the whole request.
+    $runMigration = function (string $name) use ($pdo) {
+        echo "Running migration {$name}...<br>";
+        flush();
+        $sql = file_get_contents(__DIR__ . '/../migrations/' . $name);
+
+        // Run statement-by-statement (not the whole file in one exec()) so
+        // that one already-applied ALTER TABLE doesn't cause a later,
+        // still-needed statement in the same file to be skipped too.
+        $statements = array_filter(array_map('trim', explode(';', $sql)));
+        $alreadyAppliedCodes = [1050, 1060, 1061];
+        foreach ($statements as $statement) {
+            try {
+                $pdo->exec($statement);
+            } catch (\PDOException $e) {
+                if (in_array((int) $e->errorInfo[1], $alreadyAppliedCodes, true)) {
+                    echo "  (already applied, skipping: " . htmlspecialchars($e->getMessage()) . ")<br>";
+                    flush();
+                    continue;
+                }
+                throw $e;
+            }
+        }
+    };
+
+    $runMigration('001_create_schema.sql');
+    $runMigration('002_add_verification_reset.sql');
+    $runMigration('003_add_organiser_bank_payments.sql');
+
     echo "Seeding default data...<br>";
     flush();
     // We include seed.php to load societies/events automatically
