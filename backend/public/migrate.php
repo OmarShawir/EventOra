@@ -63,6 +63,12 @@ try {
         flush();
         $sql = file_get_contents(__DIR__ . '/../migrations/' . $name);
 
+        // Strip `-- comment` lines before splitting on ';' — these files'
+        // doc comments describing the schema contain semicolons of their
+        // own (e.g. "...cancelled; "draft" and "ongoing" are left out..."),
+        // which would otherwise be mistaken for statement terminators.
+        $sql = preg_replace('/--[^\n]*/', '', $sql);
+
         // Run statement-by-statement (not the whole file in one exec()) so
         // that one already-applied ALTER TABLE doesn't cause a later,
         // still-needed statement in the same file to be skipped too.
