@@ -60,14 +60,14 @@ class PaymentController
         }
 
         // 5. Create Stripe Checkout Session
-        $stripeSecret = $_ENV['STRIPE_SECRET_KEY'] ?? '';
+        $stripeSecret = getenv('STRIPE_SECRET_KEY') ?: $_ENV['STRIPE_SECRET_KEY'] ?? '';
         if (!$stripeSecret || $stripeSecret === 'sk_test_placeholder') {
             return JsonResponse::error($response, 'Stripe integration is not configured on the server.', 500);
         }
 
         Stripe::setApiKey($stripeSecret);
 
-        $frontendUrl = rtrim($_ENV['FRONTEND_URL'] ?? 'http://localhost:5173', '/');
+        $frontendUrl = rtrim(getenv('FRONTEND_URL') ?: $_ENV['FRONTEND_URL'] ?? 'http://localhost:5173', '/');
 
         try {
             $session = StripeSession::create([
@@ -107,8 +107,8 @@ class PaymentController
      */
     public function webhook(Request $request, Response $response): Response
     {
-        $stripeSecret = $_ENV['STRIPE_SECRET_KEY'] ?? '';
-        $webhookSecret = $_ENV['STRIPE_WEBHOOK_SECRET'] ?? '';
+        $stripeSecret = getenv('STRIPE_SECRET_KEY') ?: $_ENV['STRIPE_SECRET_KEY'] ?? '';
+        $webhookSecret = getenv('STRIPE_WEBHOOK_SECRET') ?: $_ENV['STRIPE_WEBHOOK_SECRET'] ?? '';
 
         if (!$stripeSecret || $stripeSecret === 'sk_test_placeholder') {
             return JsonResponse::error($response, 'Stripe integrations are not configured.', 500);

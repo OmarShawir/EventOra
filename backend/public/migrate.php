@@ -4,8 +4,21 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use App\Database\Connection;
 use App\Env;
 
+Env::load(__DIR__ . '/../.env');
+
+// This endpoint runs schema DDL and wipes/reseeds data — it must never be
+// reachable without the secret set in MIGRATE_SECRET. If that env var isn't
+// configured at all, refuse to run rather than silently allowing anyone who
+// finds this URL to reset the database.
+$migrateSecret = getenv('MIGRATE_SECRET') ?: '';
+$providedKey = $_GET['key'] ?? '';
+if ($migrateSecret === '' || !hash_equals($migrateSecret, (string) $providedKey)) {
+    http_response_code(403);
+    echo 'Forbidden';
+    exit;
+}
+
 try {
-    Env::load(__DIR__ . '/../');
     $pdo = Connection::get();
     
     echo "Connecting to database...<br>";

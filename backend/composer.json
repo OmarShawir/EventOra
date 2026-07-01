@@ -5,6 +5,8 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*",
         "firebase/php-jwt": "^6.10",
         "slim/psr7": "^1.7",
         "slim/slim": "^4.14",
