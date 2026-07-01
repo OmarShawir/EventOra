@@ -99,7 +99,7 @@ class TicketController
 
         $pdo = Connection::get();
         $stmt = $pdo->prepare(
-            'SELECT t.*, e.title AS event_title
+            'SELECT t.*, e.title AS event_title, e.organiser_id
              FROM tickets t JOIN events e ON e.id = t.event_id
              WHERE t.qr_code = ?'
         );
@@ -108,6 +108,12 @@ class TicketController
 
         if (!$ticket) {
             return JsonResponse::error($response, 'QR code not found. Please verify the ticket.', 404);
+        }
+        // Organisers may only check in tickets for events they own. Checked
+        // before any status is revealed so a foreign organiser learns nothing
+        // about the ticket beyond "not yours".
+        if ((int) $ticket['organiser_id'] !== (int) $jwt['sub']) {
+            return JsonResponse::error($response, 'This ticket is for an event you do not organise.', 403);
         }
         if ($ticket['status'] === 'checked_in') {
             return JsonResponse::error($response, 'Already checked in!', 409, ['ticket' => $this->present($ticket)]);
