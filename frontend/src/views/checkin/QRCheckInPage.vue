@@ -28,29 +28,43 @@ function doScan(code) {
   scanState.value = "scanning";
   if (scanTimeout) clearTimeout(scanTimeout);
 
-  scanTimeout = setTimeout(() => {
-    const outcome = ticketsStore.checkIn(code.trim());
-    const ticket = ticketsStore.tickets.find((t) => t.qrCode === code.trim());
+  scanTimeout = setTimeout(async () => {
+    const outcome = await ticketsStore.checkIn(code.trim());
     const now = new Date().toLocaleTimeString("en-MY", { hour: "2-digit", minute: "2-digit" });
 
-    if (outcome.ok && outcome.ticket) {
+    if (outcome.ok) {
       scanState.value = "success";
-      result.value = { ok: true, message: "Check-in successful!", eventTitle: outcome.ticket.event.title, ticketRef: code };
-      recentScans.value = [{ code, name: outcome.ticket.event.societyName, time: now, ok: true }, ...recentScans.value.slice(0, 9)];
-    } else if (!outcome.ok && ticket?.status === "checked_in") {
-      scanState.value = "duplicate";
-      result.value = { ok: false, message: "Already checked in!", eventTitle: ticket.event.title, ticketRef: code };
-      recentScans.value = [{ code, name: ticket.event.title, time: now, ok: false }, ...recentScans.value.slice(0, 9)];
+      result.value = {
+        ok: true,
+        message: outcome.message || "Check-in successful!",
+        eventTitle: outcome.eventTitle || outcome.ticket?.event?.title,
+        ticketRef: code,
+      };
+      recentScans.value = [
+        { code, name: outcome.eventTitle || outcome.ticket?.event?.title || "Event", time: now, ok: true },
+        ...recentScans.value.slice(0, 9),
+      ];
     } else {
-      scanState.value = "error";
-      result.value = { ok: false, message: outcome.message };
-      recentScans.value = [{ code, name: "Unknown", time: now, ok: false }, ...recentScans.value.slice(0, 9)];
+      const isDuplicate = outcome.message?.includes("Already");
+      scanState.value = isDuplicate ? "duplicate" : "error";
+      result.value = {
+        ok: false,
+        message: outcome.message || "QR code not found.",
+        eventTitle: outcome.ticket?.event?.title,
+        ticketRef: code,
+      };
+      recentScans.value = [
+        { code, name: outcome.ticket?.event?.title || "Unknown", time: now, ok: false },
+        ...recentScans.value.slice(0, 9),
+      ];
     }
   }, 900);
 }
 
 function simulateScan() {
-  const activeTickets = ticketsStore.tickets.filter((t) => t.status === "active");
+  const activeTickets = ticketsStore.tickets.filter(
+    (t) => t.status === "confirmed" || t.status === "active" || t.status === "waitlisted"
+  );
   if (activeTickets.length > 0) {
     const t = activeTickets[Math.floor(Math.random() * activeTickets.length)];
     manualCode.value = t.qrCode;

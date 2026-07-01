@@ -35,14 +35,14 @@ const upcomingCount = computed(() =>
 
     <!-- Body -->
     <div style="padding:14px 16px;flex:1;display:flex;flex-direction:column">
-      <h3 style="font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:3px;line-height:1.3">{{ name }}</h3>
-      <p style="font-size:11px;color:#520000;font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.04em">{{ meta.faculty }}</p>
+      <h3 style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:3px;line-height:1.3">{{ name }}</h3>
+      <p style="font-size:11px;color:var(--maroon);font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.04em">{{ meta.faculty }}</p>
       <p class="society-desc">{{ meta.desc }}</p>
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:11px;color:#555555;display:flex;align-items:center;gap:3px">
+        <span style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:3px">
           <Users :size="11"/> {{ meta.members.toLocaleString() }}
         </span>
-        <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#520000;font-weight:600">
+        <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--maroon);font-weight:600">
           View <ChevronRight :size="13"/>
         </span>
       </div>
@@ -52,17 +52,17 @@ const upcomingCount = computed(() =>
 
 <style scoped>
 .society-card {
-  background: #fff; border: 1px solid #E5E5E5; border-radius: 10px;
+  background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 10px;
   overflow: hidden; cursor: pointer; transition: all 200ms ease;
   display: flex; flex-direction: column;
 }
 .society-card:hover {
   box-shadow: 0 6px 20px rgba(82,0,0,0.12);
-  border-color: #c17070;
+  border-color: var(--maroon-border);
   transform: translateY(-3px);
 }
 .society-desc {
-  font-size: 12px; color: #555555; line-height: 1.6; flex: 1;
+  font-size: 12px; color: var(--text-secondary); line-height: 1.6; flex: 1;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; margin-bottom: 12px;
 }

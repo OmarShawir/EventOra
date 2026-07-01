@@ -1,462 +1,162 @@
 import { defineStore } from "pinia";
+import {
+  fetchEvents,
+  createEvent as createEventRequest,
+  updateEventRequest,
+  approveEventRequest,
+  rejectEventRequest,
+  cancelEventRequest,
+  fetchPendingEvents,
+  fetchMyEvents,
+} from "@/api/events";
+import mockEvents from "@/mock/events.json";
 
 // Mirrors the EVENT entity from the ER diagram:
 // id, society_id, title, description, venue, starts_at, ends_at, capacity, price, status
 // status flow: draft > pending_approval > approved > ongoing > completed / cancelled
-// (here simplified to: pending | approved | cancelled | completed, matching the
-// original Figma prototype's AppContext.tsx)
-
-const MOCK_EVENTS = [
-  {
-    id: "e1",
-    societyId: "s1",
-    societyName: "IEEE UTM Student Branch",
-    title: "Tech Symposium 2026",
-    description:
-      "Join us for a full-day symposium featuring keynote speakers from industry leaders, research paper presentations, and networking sessions. Topics include AI/ML, embedded systems, and cybersecurity. Light refreshments provided.",
-    category: "Academic",
-    venue: "Dewan Sultan Iskandar, UTM",
-    date: "Sat, 21 Jun 2026",
-    time: "9:00 AM",
-    endsAt: "5:00 PM",
-    capacity: 200,
-    spotsLeft: 42,
-    price: 0,
-    status: "approved",
-    imageUrl:
-      "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&h=400&fit=crop&auto=format",
-    tags: ["AI", "Networking", "Research"],
-    organiserName: "Ahmad Faris",
-  },
-  {
-    id: "e2",
-    societyId: "s2",
-    societyName: "UTM Sports Club",
-    title: "Inter-Faculty Futsal Championship",
-    description:
-      "Annual inter-faculty futsal tournament open to all UTM students. Teams of 5-7 players. Register your team and compete for the coveted UTM Futsal Cup. Registration includes jersey and refreshments.",
-    category: "Sports",
-    venue: "Indoor Sports Hall, UTM",
-    date: "Sun, 22 Jun 2026",
-    time: "8:00 AM",
-    endsAt: "6:00 PM",
-    capacity: 80,
-    spotsLeft: 8,
-    price: 10,
-    status: "approved",
-    imageUrl:
-      "https://images.unsplash.com/photo-1575361204480-aadea25e6e68?w=800&h=400&fit=crop&auto=format",
-    tags: ["Futsal", "Tournament", "Team Sport"],
-    organiserName: "Haziq Zulkifli",
-  },
-  {
-    id: "e3",
-    societyId: "s3",
-    societyName: "UTM Cultural & Heritage Society",
-    title: "Batik Workshop: Art of the Archipelago",
-    description:
-      "A hands-on batik painting workshop guided by master craftspeople. All materials provided. Learn traditional wax-resist dyeing techniques and take home your own batik creation.",
-    category: "Cultural",
-    venue: "Faculty of Built Environment, UTM",
-    date: "Fri, 27 Jun 2026",
-    time: "2:00 PM",
-    endsAt: "6:00 PM",
-    capacity: 40,
-    spotsLeft: 0,
-    price: 15,
-    status: "approved",
-    imageUrl:
-      "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=400&fit=crop&auto=format",
-    tags: ["Art", "Heritage", "Hands-on"],
-    organiserName: "Nurul Ain",
-  },
-  {
-    id: "e4",
-    societyId: "s4",
-    societyName: "UTM Entrepreneurship Club",
-    title: "Startup Pitch Night: UTM Founders Edition",
-    description:
-      "10 student startups compete for RM 5,000 in seed funding and mentorship from leading VCs and industry founders. Open to all attendees. Networking dinner follows the pitching session.",
-    category: "Career",
-    venue: "N28 Auditorium, UTM",
-    date: "Thu, 3 Jul 2026",
-    time: "7:00 PM",
-    endsAt: "10:00 PM",
-    capacity: 150,
-    spotsLeft: 120,
-    price: 0,
-    status: "approved",
-    imageUrl:
-      "https://images.unsplash.com/photo-1515187029135-18ee286d815b?w=800&h=400&fit=crop&auto=format",
-    tags: ["Startups", "Pitching", "Networking"],
-    organiserName: "Syazwan Ariff",
-  },
-  {
-    id: "e5",
-    societyId: "s5",
-    societyName: "UTM Data Science Society",
-    title: "Python for Data Science: Hands-On Workshop",
-    description:
-      "A beginner-to-intermediate workshop covering pandas, matplotlib, and scikit-learn. Bring your laptop with Anaconda pre-installed. We'll work through a real dataset from UTM's academic records.",
-    category: "Workshop",
-    venue: "N28 Lab 3, UTM",
-    date: "Sat, 5 Jul 2026",
-    time: "9:00 AM",
-    endsAt: "1:00 PM",
-    capacity: 30,
-    spotsLeft: 5,
-    price: 0,
-    status: "approved",
-    imageUrl:
-      "https://images.unsplash.com/photo-1504639725590-34d0984388bd?w=800&h=400&fit=crop&auto=format",
-    tags: ["Python", "Data Science", "Beginner"],
-    organiserName: "Dr. Amirul Hassan",
-  },
-  {
-    id: "e6",
-    societyId: "s6",
-    societyName: "UTM Muslim Students Society",
-    title: "Jumuah Ilm: Islamic Perspectives on AI",
-    description:
-      "A weekly knowledge circle exploring contemporary issues through an Islamic lens. This week: ethics of artificial intelligence, algorithmic bias, and the responsibilities of Muslim technologists.",
-    category: "Religious",
-    venue: "Masjid Sultan Ismail, UTM",
-    date: "Fri, 4 Jul 2026",
-    time: "1:30 PM",
-    endsAt: "3:00 PM",
-    capacity: 500,
-    spotsLeft: 200,
-    price: 0,
-    status: "approved",
-    imageUrl:
-      "https://images.unsplash.com/photo-1564769662533-4f00a87b4056?w=800&h=400&fit=crop&auto=format",
-    tags: ["Islamic Studies", "AI Ethics", "Open to all"],
-    organiserName: "Ustaz Hafizuddin",
-  },
-  {
-    id: "e7",
-    societyId: "s1",
-    societyName: "IEEE UTM Student Branch",
-    title: "Embedded Systems Bootcamp",
-    description:
-      "Three-day intensive bootcamp on STM32 microcontrollers, FreeRTOS, and IoT protocols. Limited to 20 participants. Hardware kits provided. Certificate of completion issued.",
-    category: "Workshop",
-    venue: "Faculty of Electrical Engineering, UTM",
-    date: "Mon, 14 Jul 2026",
-    time: "9:00 AM",
-    endsAt: "5:00 PM",
-    capacity: 20,
-    spotsLeft: 7,
-    price: 50,
-    status: "pending",
-    imageUrl:
-      "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&h=400&fit=crop&auto=format",
-    tags: ["Embedded", "IoT", "Hardware"],
-    organiserName: "Ahmad Faris",
-  },
-  {
-    id: "e8",
-    societyId: "s7",
-    societyName: "UTM Career Services",
-    title: "UTM Career Fair 2026",
-    description:
-      "Over 60 top Malaysian and multinational employers across engineering, technology, finance, and consulting. Bring printed CVs. Professional dress required. On-the-spot interviews available.",
-    category: "Career",
-    venue: "Dewan Canselor Tun Hussein Onn, UTM",
-    date: "Wed, 16 Jul 2026",
-    time: "9:00 AM",
-    endsAt: "5:00 PM",
-    capacity: 1000,
-    spotsLeft: 400,
-    price: 0,
-    status: "approved",
-    imageUrl:
-      "https://images.unsplash.com/photo-1606857521015-7f9fcf423740?w=800&h=400&fit=crop&auto=format",
-    tags: ["Jobs", "Networking", "Internship"],
-    organiserName: "Puan Roslina",
-  },
-  {
-    id: "e9",
-    societyId: "s3",
-    societyName: "UTM Performing Arts Society",
-    title: "Seni Tari Nusantara: Dance Showcase",
-    description:
-      "Annual showcase of traditional Malay, Javanese, and Minangkabau dances performed by UTM's award-winning dance troupe. Post-show meet-and-greet with performers. Formal attire encouraged.",
-    category: "Cultural",
-    venue: "Aman Damai Hall, UTM",
-    date: "Sat, 19 Jul 2026",
-    time: "8:00 PM",
-    endsAt: "10:30 PM",
-    capacity: 200,
-    spotsLeft: 60,
-    price: 5,
-    status: "approved",
-    imageUrl:
-      "https://images.unsplash.com/photo-1518834107812-67b0b7c58434?w=800&h=400&fit=crop&auto=format",
-    tags: ["Dance", "Performance", "Culture"],
-    organiserName: "Nurul Ain",
-  },
-  {
-    id: "e10",
-    societyId: "s1",
-    societyName: "IEEE UTM Student Branch",
-    title: "Cybersecurity CTF Competition 2025",
-    description:
-      "Capture the Flag competition testing web exploitation, binary reverse engineering, and cryptography. Teams of 1-3. Certificate and cash prizes for top 3 teams.",
-    category: "Academic",
-    venue: "N28 Lab 5, UTM",
-    date: "Sat, 15 Nov 2025",
-    time: "9:00 AM",
-    endsAt: "9:00 PM",
-    capacity: 60,
-    spotsLeft: 0,
-    price: 0,
-    status: "completed",
-    imageUrl:
-      "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&h=400&fit=crop&auto=format",
-    tags: ["CTF", "Security", "Competition"],
-    organiserName: "Ahmad Faris",
-  },
-  // ── Past / completed events ────────────────────────────────────────────────
-  {
-    id: "p1",
-    societyId: "s1",
-    societyName: "IEEE UTM Student Branch",
-    title: "IoT Hackathon: Smart Campus Challenge",
-    description:
-      "48-hour hackathon where teams built smart campus solutions using ESP32, MQTT, and Node-RED. Over 20 teams competed. Winner integrated real-time energy monitoring into UTM's facilities.",
-    category: "Academic",
-    venue: "N28 Lab 2, UTM",
-    date: "Sat, 5 Apr 2025",
-    time: "8:00 AM",
-    endsAt: "Sun, 6 Apr 2025 · 8:00 AM",
-    capacity: 80,
-    spotsLeft: 0,
-    price: 0,
-    status: "completed",
-    imageUrl:
-      "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&h=400&fit=crop&auto=format",
-    tags: ["IoT", "Hackathon", "ESP32"],
-    organiserName: "Ahmad Faris",
-  },
-  {
-    id: "p2",
-    societyId: "s2",
-    societyName: "UTM Sports Club",
-    title: "UTM Badminton Open 2025",
-    description:
-      "Annual open badminton tournament for all UTM students. Singles and doubles categories. 128-player draw. Sponsored by Yonex Malaysia.",
-    category: "Sports",
-    venue: "Sports Complex, UTM",
-    date: "Sat, 22 Mar 2025",
-    time: "8:00 AM",
-    endsAt: "6:00 PM",
-    capacity: 128,
-    spotsLeft: 0,
-    price: 5,
-    status: "completed",
-    imageUrl:
-      "https://images.unsplash.com/photo-1612534847738-b3af9bc31f0c?w=800&h=400&fit=crop&auto=format",
-    tags: ["Badminton", "Tournament", "Open"],
-    organiserName: "Haziq Zulkifli",
-  },
-  {
-    id: "p3",
-    societyId: "s3",
-    societyName: "UTM Cultural & Heritage Society",
-    title: "Citrawarna UTM 2025: Colors of Malaysia",
-    description:
-      "Annual cultural carnival showcasing traditional costumes, food, music, and dances from all 13 Malaysian states and the diverse ethnic communities of UTM.",
-    category: "Cultural",
-    venue: "UTM Central Lawn",
-    date: "Sat, 8 Feb 2025",
-    time: "10:00 AM",
-    endsAt: "8:00 PM",
-    capacity: 500,
-    spotsLeft: 0,
-    price: 0,
-    status: "completed",
-    imageUrl:
-      "https://images.unsplash.com/photo-1514222134-b57c016b3a96?w=800&h=400&fit=crop&auto=format",
-    tags: ["Cultural", "Carnival", "Malaysia"],
-    organiserName: "Nurul Ain",
-  },
-  {
-    id: "p4",
-    societyId: "s4",
-    societyName: "UTM Entrepreneurship Club",
-    title: "Founder's Masterclass: Scaling Your Startup",
-    description:
-      "A fireside chat and masterclass with three Malaysian startup founders who scaled past Series A. Topics: fundraising, talent, product-market fit, and the Malaysia startup ecosystem.",
-    category: "Career",
-    venue: "N28 Auditorium, UTM",
-    date: "Wed, 19 Feb 2025",
-    time: "6:30 PM",
-    endsAt: "9:00 PM",
-    capacity: 120,
-    spotsLeft: 0,
-    price: 0,
-    status: "completed",
-    imageUrl:
-      "https://images.unsplash.com/photo-1591115765373-5207764f72e7?w=800&h=400&fit=crop&auto=format",
-    tags: ["Startup", "Masterclass", "Fundraising"],
-    organiserName: "Syazwan Ariff",
-  },
-  {
-    id: "p5",
-    societyId: "s5",
-    societyName: "UTM Data Science Society",
-    title: "Kaggle Kickstart: Your First ML Model",
-    description:
-      "Beginner-friendly workshop guiding participants through their first end-to-end machine learning submission on Kaggle. Covered data cleaning, feature engineering, and XGBoost.",
-    category: "Workshop",
-    venue: "N28 Lab 3, UTM",
-    date: "Sat, 18 Jan 2025",
-    time: "9:00 AM",
-    endsAt: "1:00 PM",
-    capacity: 30,
-    spotsLeft: 0,
-    price: 0,
-    status: "completed",
-    imageUrl:
-      "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&h=400&fit=crop&auto=format",
-    tags: ["Machine Learning", "Kaggle", "Beginner"],
-    organiserName: "Dr. Amirul Hassan",
-  },
-  {
-    id: "p6",
-    societyId: "s6",
-    societyName: "UTM Muslim Students Society",
-    title: "Iftar Ramadan 2025: Breaking Fast Together",
-    description:
-      "Community iftar bringing together 300+ UTM students, staff, and faculty for a shared Ramadan meal, followed by Tarawih prayers and a short tazkirah on gratitude.",
-    category: "Religious",
-    venue: "Masjid Sultan Ismail, UTM",
-    date: "Thu, 20 Mar 2025",
-    time: "6:45 PM",
-    endsAt: "9:30 PM",
-    capacity: 300,
-    spotsLeft: 0,
-    price: 0,
-    status: "completed",
-    imageUrl:
-      "https://images.unsplash.com/photo-1564769662533-4f00a87b4056?w=800&h=400&fit=crop&auto=format",
-    tags: ["Ramadan", "Community", "Iftar"],
-    organiserName: "Ustaz Hafizuddin",
-  },
-  {
-    id: "p7",
-    societyId: "s3",
-    societyName: "UTM Performing Arts Society",
-    title: "Teater UTM: Kembara Jiwa",
-    description:
-      "Original Malaysian theatre production exploring themes of identity, belonging, and the student experience. Performed over two nights to a sold-out audience of 400.",
-    category: "Cultural",
-    venue: "Aman Damai Hall, UTM",
-    date: "Fri, 7 Mar 2025",
-    time: "8:00 PM",
-    endsAt: "10:00 PM",
-    capacity: 200,
-    spotsLeft: 0,
-    price: 8,
-    status: "completed",
-    imageUrl:
-      "https://images.unsplash.com/photo-1598387993441-a364f854b2ef?w=800&h=400&fit=crop&auto=format",
-    tags: ["Theatre", "Drama", "Original"],
-    organiserName: "Nurul Ain",
-  },
-  {
-    id: "p8",
-    societyId: "s7",
-    societyName: "UTM Career Services",
-    title: "Resume & LinkedIn Bootcamp",
-    description:
-      "Half-day bootcamp with HR professionals from top Malaysian firms. Participants received personalised CV reviews and LinkedIn profile audits. 94% rated it 4 or 5 stars.",
-    category: "Career",
-    venue: "Faculty of Computing, Seminar Room 1",
-    date: "Sat, 25 Jan 2025",
-    time: "9:00 AM",
-    endsAt: "1:00 PM",
-    capacity: 80,
-    spotsLeft: 0,
-    price: 0,
-    status: "completed",
-    imageUrl:
-      "https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=800&h=400&fit=crop&auto=format",
-    tags: ["CV", "LinkedIn", "Career"],
-    organiserName: "Puan Roslina",
-  },
-  {
-    id: "p9",
-    societyId: "s2",
-    societyName: "UTM Sports Club",
-    title: "UTM Fun Run 5K 2025",
-    description:
-      "Scenic 5km fun run through the UTM campus greenery. Over 400 participants ranging from casual joggers to competitive runners. Finisher medals and refreshments provided.",
-    category: "Sports",
-    venue: "UTM Main Campus",
-    date: "Sun, 16 Feb 2025",
-    time: "6:30 AM",
-    endsAt: "9:00 AM",
-    capacity: 400,
-    spotsLeft: 0,
-    price: 10,
-    status: "completed",
-    imageUrl:
-      "https://images.unsplash.com/photo-1542281286-9e0a16bb7366?w=800&h=400&fit=crop&auto=format",
-    tags: ["Running", "Fitness", "Fun Run"],
-    organiserName: "Haziq Zulkifli",
-  },
-];
+// (here simplified to: pending | approved | cancelled | completed)
 
 export const useEventsStore = defineStore("events", {
   state: () => ({
-    events: [...MOCK_EVENTS],
+    events: [],
+    loading: false,
+    error: null,
+    loaded: false,
   }),
 
   getters: {
     getEventById: (state) => (id) => state.events.find((e) => e.id === id),
-
     approvedEvents: (state) => state.events.filter((e) => e.status === "approved"),
-
     pendingEvents: (state) => state.events.filter((e) => e.status === "pending"),
   },
 
   actions: {
-    approveEvent(id) {
-      const ev = this.events.find((e) => e.id === id);
-      if (ev) ev.status = "approved";
+    /**
+     * Loads events from the Slim 4 API. Until that route exists (Week 4 —
+     * Backend Core), the request fails and we transparently fall back to
+     * local mock JSON so the rest of the app keeps working unmodified.
+     * Call this once from App.vue/RootLayout on mount.
+     */
+    async fetchAll() {
+      if (this.loaded) return;
+      this.loading = true;
+      this.error = null;
+      try {
+        this.events = await fetchEvents();
+      } catch (err) {
+        console.warn("[events store] API unavailable, using mock data:", err.message);
+        this.events = [...mockEvents];
+      } finally {
+        this.loading = false;
+        this.loaded = true;
+      }
     },
 
-    rejectEvent(id) {
+    async approveEvent(id) {
       const ev = this.events.find((e) => e.id === id);
-      if (ev) ev.status = "cancelled";
+      if (!ev) return;
+      ev.status = "approved"; // optimistic update
+      try {
+        await approveEventRequest(id);
+      } catch (err) {
+        console.warn("[events store] approveEvent API call failed, kept optimistic update:", err.message);
+      }
     },
 
-    addEvent(ev) {
-      const newEvent = {
+    async rejectEvent(id) {
+      const ev = this.events.find((e) => e.id === id);
+      if (!ev) return;
+      ev.status = "cancelled";
+      try {
+        await rejectEventRequest(id);
+      } catch (err) {
+        console.warn("[events store] rejectEvent API call failed, kept optimistic update:", err.message);
+      }
+    },
+
+    async addEvent(ev) {
+      const optimistic = {
         ...ev,
         id: `e${Date.now()}`,
         spotsLeft: ev.capacity,
         status: "pending",
       };
-      this.events.unshift(newEvent);
-      return newEvent;
+      this.events.unshift(optimistic);
+      try {
+        const saved = await createEventRequest(ev);
+        const idx = this.events.findIndex((e) => e.id === optimistic.id);
+        if (idx !== -1 && saved) {
+          this.events[idx] = saved;
+          return saved;
+        }
+      } catch (err) {
+        console.warn("[events store] addEvent API call failed:", err.message);
+        const idx = this.events.findIndex((e) => e.id === optimistic.id);
+        if (idx !== -1) this.events.splice(idx, 1);
+        throw err;
+      }
+      return optimistic;
     },
 
-    updateEvent(id, patch) {
+    async updateEvent(id, patch) {
       const idx = this.events.findIndex((e) => e.id === id);
-      if (idx !== -1) this.events[idx] = { ...this.events[idx], ...patch };
+      if (idx === -1) return;
+      const original = { ...this.events[idx] };
+      this.events[idx] = { ...this.events[idx], ...patch };
+      try {
+        await updateEventRequest(id, patch);
+      } catch (err) {
+        console.warn("[events store] updateEvent API call failed:", err.message);
+        this.events[idx] = original;
+        throw err;
+      }
     },
 
-    cancelEvent(id) {
+    async cancelEvent(id) {
       const ev = this.events.find((e) => e.id === id);
-      if (ev) ev.status = "cancelled";
+      if (!ev) return;
+      ev.status = "cancelled";
+      try {
+        await cancelEventRequest(id);
+      } catch (err) {
+        console.warn("[events store] cancelEvent API call failed, kept optimistic update:", err.message);
+      }
     },
 
+    // Local-only state change (no dedicated endpoint — spotsLeft is derived
+    // server-side from ticket count once the backend is live).
     decrementSpots(id) {
       const ev = this.events.find((e) => e.id === id);
       if (ev) ev.spotsLeft = Math.max(0, ev.spotsLeft - 1);
+    },
+
+    async fetchPending() {
+      try {
+        const pending = await fetchPendingEvents();
+        this.mergeEvents(pending);
+      } catch (err) {
+        console.warn("[events store] fetchPending API call failed:", err.message);
+      }
+    },
+
+    async fetchMine() {
+      try {
+        const mine = await fetchMyEvents();
+        this.mergeEvents(mine);
+      } catch (err) {
+        console.warn("[events store] fetchMine API call failed:", err.message);
+      }
+    },
+
+    mergeEvents(newEvents) {
+      newEvents.forEach((newEvent) => {
+        const idx = this.events.findIndex((e) => e.id === newEvent.id);
+        if (idx !== -1) {
+          this.events[idx] = newEvent;
+        } else {
+          this.events.push(newEvent);
+        }
+      });
     },
   },
 });

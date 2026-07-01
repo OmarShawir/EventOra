@@ -96,22 +96,22 @@ const infoRows = computed(() => [
 
       <!-- Left: events -->
       <div>
-        <div style="display:flex;border-bottom:1px solid #E5E5E5;margin-bottom:20px">
+        <div style="display:flex;border-bottom:1px solid var(--border-color);margin-bottom:20px">
           <button v-for="t in [{key:'upcoming',label:'Upcoming Events',count:upcomingEvents.length},{key:'past',label:'Past Events',count:pastEvents.length}]" :key="t.key"
             @click="activeTab=t.key"
-            :style="{ background:'none', border:'none', cursor:'pointer', fontSize:'14px', fontWeight:activeTab===t.key?600:400, color:activeTab===t.key?'#520000':'#555555', padding:'8px 0', paddingRight:'24px', borderBottom:`2px solid ${activeTab===t.key?'#520000':'transparent'}`, marginBottom:'-1px', display:'flex', alignItems:'center', gap:'6px', fontFamily:'inherit' }">
+            :style="{ background:'none', border:'none', cursor:'pointer', fontSize:'14px', fontWeight:activeTab===t.key?600:400, color:activeTab===t.key?'var(--maroon)':'var(--text-secondary)', padding:'8px 0', paddingRight:'24px', borderBottom:`2px solid ${activeTab===t.key?'var(--maroon)':'transparent'}`, marginBottom:'-1px', display:'flex', alignItems:'center', gap:'6px', fontFamily:'inherit' }">
             {{ t.label }}
-            <span :style="{ background:activeTab===t.key?'#FFF5F5':'#F0F0F0', color:activeTab===t.key?'#520000':'#555555', borderRadius:'10px', fontSize:'11px', padding:'1px 7px', fontWeight:600 }">{{ t.count }}</span>
+            <span :style="{ background:activeTab===t.key?'var(--maroon-light)':'var(--bg-pill)', color:activeTab===t.key?'var(--maroon)':'var(--text-secondary)', borderRadius:'10px', fontSize:'11px', padding:'1px 7px', fontWeight:600 }">{{ t.count }}</span>
           </button>
         </div>
 
         <!-- Upcoming -->
         <template v-if="activeTab==='upcoming'">
           <div v-if="upcomingEvents.length===0" style="text-align:center;padding:48px 0">
-            <Calendar :size="48" style="color:#C17070;margin-bottom:12px;stroke-width:1.5"/>
-            <p style="font-size:16px;font-weight:600;color:#1a1a1a;margin-bottom:6px">No upcoming events</p>
-            <p style="font-size:14px;color:#555555">Check back soon or browse their event history.</p>
-            <button @click="activeTab='past'" style="margin-top:12px;background:none;border:none;color:#520000;font-size:14px;font-weight:500;cursor:pointer;text-decoration:underline;font-family:inherit">View past events →</button>
+            <Calendar :size="48" style="color:var(--accent);margin-bottom:12px;stroke-width:1.5"/>
+            <p style="font-size:16px;font-weight:600;color:var(--text-primary);margin-bottom:6px">No upcoming events</p>
+            <p style="font-size:14px;color:var(--text-secondary)">Check back soon or browse their event history.</p>
+            <button @click="activeTab='past'" style="margin-top:12px;background:none;border:none;color:var(--maroon);font-size:14px;font-weight:500;cursor:pointer;text-decoration:underline;font-family:inherit">View past events →</button>
           </div>
           <div v-else style="display:flex;flex-direction:column;gap:12px">
             <EventRow v-for="ev in upcomingEvents" :key="ev.id" :event="ev"/>
@@ -121,12 +121,12 @@ const infoRows = computed(() => [
         <!-- Past -->
         <template v-if="activeTab==='past'">
           <div v-if="pastEvents.length===0" style="text-align:center;padding:48px 0">
-            <Clock :size="48" style="color:#C17070;margin-bottom:12px;stroke-width:1.5"/>
-            <p style="font-size:16px;font-weight:600;color:#1a1a1a;margin-bottom:6px">No past events yet</p>
-            <p style="font-size:14px;color:#555555">This society's history will appear here after events are completed.</p>
+            <Clock :size="48" style="color:var(--accent);margin-bottom:12px;stroke-width:1.5"/>
+            <p style="font-size:16px;font-weight:600;color:var(--text-primary);margin-bottom:6px">No past events yet</p>
+            <p style="font-size:14px;color:var(--text-secondary)">This society's history will appear here after events are completed.</p>
           </div>
           <template v-else>
-            <p style="font-size:13px;color:#555555;margin-bottom:16px">{{ pastEvents.length }} completed event{{ pastEvents.length!==1?'s':'' }} — click "Reviews" to see attendee feedback</p>
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">{{ pastEvents.length }} completed event{{ pastEvents.length!==1?'s':'' }} — click "Reviews" to see attendee feedback</p>
             <div style="display:flex;flex-direction:column;gap:12px">
               <PastEventCard v-for="ev in pastEvents" :key="ev.id" :event="ev" :feedback-list="getFeedback(ev.id)"/>
             </div>
@@ -136,7 +136,7 @@ const infoRows = computed(() => [
 
       <!-- Right: about card -->
       <div style="position:sticky;top:88px">
-        <div style="background:#fff;border:1px solid #E5E5E5;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);margin-bottom:16px">
+        <div style="background:var(--bg-card);border:1px solid var(--border-card);border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);margin-bottom:16px">
           <div :style="{ background: meta.logoColor, padding:'20px 24px', display:'flex', alignItems:'center', gap:'14px' }">
             <div style="width:48px;height:48px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;flex-shrink:0">
               {{ initials || name[0] }}
@@ -147,18 +147,18 @@ const infoRows = computed(() => [
             </div>
           </div>
           <div style="padding:20px">
-            <p style="font-size:13px;color:#555555;line-height:1.7;margin-bottom:16px">{{ meta.desc }}</p>
+            <p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:16px">{{ meta.desc }}</p>
             <div style="display:flex;flex-direction:column">
-              <div v-for="row in infoRows" :key="row.label" style="display:flex;justify-content:space-between;font-size:13px;padding:9px 0;border-bottom:1px solid #F0F0F0">
-                <span style="color:#555555">{{ row.label }}</span>
-                <span :style="{ fontWeight:500, color: row.value.startsWith('★') ? '#B45309' : '#1a1a1a' }">{{ row.value }}</span>
+              <div v-for="row in infoRows" :key="row.label" style="display:flex;justify-content:space-between;font-size:13px;padding:9px 0;border-bottom:1px solid var(--border-color)">
+                <span style="color:var(--text-secondary)">{{ row.label }}</span>
+                <span :style="{ fontWeight:500, color: row.value.startsWith('★') ? '#B45309' : 'var(--text-primary)' }">{{ row.value }}</span>
               </div>
             </div>
           </div>
         </div>
 
         <!-- Quick switch -->
-        <div style="background:#fff;border:1px solid #E5E5E5;border-radius:8px;padding:14px 16px">
+        <div style="background:var(--bg-card);border:1px solid var(--border-card);border-radius:8px;padding:14px 16px">
           <p style="font-size:12px;font-weight:600;color:#AAAAAA;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Browse</p>
           <button @click="activeTab = activeTab==='upcoming' ? 'past' : 'upcoming'" class="quick-switch-btn">
             <template v-if="activeTab==='upcoming'"><Clock :size="14"/> View Past Events</template>
@@ -175,10 +175,10 @@ const infoRows = computed(() => [
   .society-detail-grid { grid-template-columns: 1fr !important; }
 }
 .quick-switch-btn {
-  width: 100%; height: 38px; border: 1px solid #520000; border-radius: 6px;
-  background: none; color: #520000; font-size: 13px; font-weight: 600;
+  width: 100%; height: 38px; border: 1px solid var(--maroon); border-radius: 6px;
+  background: none; color: var(--maroon); font-size: 13px; font-weight: 600;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   gap: 6px; transition: background 150ms; font-family: inherit;
 }
-.quick-switch-btn:hover { background: #fff5f5; }
+.quick-switch-btn:hover { background: var(--maroon-light); }
 </style>
