@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { Plus, Edit2, Download, BarChart2, Star, Users, Calendar, Clock, XCircle, CheckCircle2, X, CreditCard, DollarSign } from "lucide-vue-next";
+import { Plus, Edit2, Download, BarChart2, Star, Users, Calendar, Clock, XCircle, CheckCircle2, X, CreditCard } from "lucide-vue-next";
 import { useAuthStore } from "@/stores/auth";
 import { useEventsStore } from "@/stores/events";
 import { useFeedbackStore } from "@/stores/feedback";

@@ -5,7 +5,6 @@ import { useAuthStore } from "@/stores/auth";
 import { useEventsStore } from "@/stores/events";
 import { useTicketsStore } from "@/stores/tickets";
 import Navbar from "@/components/common/Navbar.vue";
-import Footer from "@/components/common/Footer.vue";
 import AuthModal from "@/components/auth/AuthModal.vue";
 
 const auth = useAuthStore();

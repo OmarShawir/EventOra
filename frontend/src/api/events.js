@@ -9,10 +9,6 @@ export function fetchEvents() {
   return api.get("/events").then((res) => res.data);
 }
 
-export function fetchEventById(id) {
-  return api.get(`/events/${id}`).then((res) => res.data);
-}
-
 export function createEvent(payload) {
   return api.post("/events", payload).then((res) => res.data);
 }

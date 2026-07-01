@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { Eye, EyeOff, Lock, AlertCircle, CheckCircle2, ChevronRight } from "lucide-vue-next";

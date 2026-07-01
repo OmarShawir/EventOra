@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from "vue";
+import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { Calendar, MapPin } from "lucide-vue-next";
 import { useTicketsStore } from "@/stores/tickets";
