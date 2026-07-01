@@ -110,27 +110,6 @@ function setErr(field, e) {
 }
 
 
-// ── Demo login ────────────────────────────────────────────────────────────────
-const demoAccounts = [
-  { label: "Attendee", email: "attendee@utm.my", name: "Ahmad Syafiq", border: "#1A7A4A", bg: "#D1FAE5", color: "#065F46" },
-  { label: "Organiser", email: "organiser@utm.my", name: "Ahmad Faris", border: "#B45309", bg: "#FEF3C7", color: "#92400E" },
-  { label: "Admin", email: "admin@utm.my", name: "Prof. Dr. Razali", border: "#520000", bg: "#FFF5F5", color: "#520000" },
-];
-
-async function quickLogin(d) {
-  submitting.value = true;
-  generalError.value = "";
-  try {
-    await auth.login(d.email, "password123");
-    submitting.value = false;
-    submitted.value = "login";
-    setTimeout(() => { emit("success", auth.user); emit("close"); }, 700);
-  } catch (err) {
-    submitting.value = false;
-    generalError.value = err.response?.data?.error || err.message || "Login failed";
-  }
-}
-
 async function onGoogleResponse(response) {
   submitting.value = true;
   generalError.value = "";
@@ -383,30 +362,6 @@ const pwLabels = ["", "Weak", "Fair", "Strong"];
           <div v-if="generalError" style="background: #FFF5F5; border: 1px solid #B91C1C; border-radius: 8px; padding: 12px; margin-bottom: 20px; color: #B91C1C; font-size: 13px; display: flex; align-items: center; gap: 8px">
             <AlertCircle :size="16" />
             <span>{{ generalError }}</span>
-          </div>
-
-          <!-- Demo accounts -->
-          <div style="background: var(--bg-pill); border: 1px solid var(--border-card); border-radius: 8px; padding: 12px 14px; margin-bottom: 20px">
-            <p style="font-size: 11px; font-weight: 600; color: #AAAAAA; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px">
-              ⚡ Quick demo login
-            </p>
-            <div style="display: flex; gap: 8px">
-              <button
-                v-for="d in demoAccounts"
-                :key="d.label"
-                type="button"
-                @click="quickLogin(d)"
-                :style="{ flex: 1, padding: '7px 4px', borderRadius: '6px', border: `1px solid ${d.border}`, background: d.bg, color: d.color, fontSize: '12px', fontWeight: 600, cursor: 'pointer' }"
-              >
-                {{ d.label }}
-              </button>
-            </div>
-          </div>
-
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px">
-            <div style="flex: 1; height: 1px; background: var(--border-color)" />
-            <span style="font-size: 12px; color: #AAAAAA">or sign in manually</span>
-            <div style="flex: 1; height: 1px; background: var(--border-color)" />
           </div>
 
           <!-- Email -->
