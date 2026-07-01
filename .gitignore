@@ -6,3 +6,6 @@ dist/
 .DS_Store
 android/
 ios/
+backend/vendor/
+backend/stripe.exe
+backend/public/uploads/

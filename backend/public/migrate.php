@@ -1,8 +1,22 @@
 <?php
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use App\Database\Connection;
 use App\Env;
+
+Env::load(__DIR__ . '/../.env');
+
+// This endpoint runs schema DDL and wipes/reseeds data — it must never be
+// reachable without the secret set in MIGRATE_SECRET. If that env var isn't
+// configured at all, refuse to run rather than silently allowing anyone who
+// finds this URL to reset the database. Checked before anything else so
+// the DB parameters printed below never leak to an unauthenticated caller.
+$migrateSecret = getenv('MIGRATE_SECRET') ?: '';
+$providedKey = $_GET['key'] ?? '';
+if ($migrateSecret === '' || !hash_equals($migrateSecret, (string) $providedKey)) {
+    http_response_code(403);
+    echo 'Forbidden';
+    exit;
+}
 
 // Disable output buffering to send output immediately to the browser
 if (ob_get_level()) ob_end_clean();
@@ -10,8 +24,6 @@ echo "Starting database setup...<br>";
 flush();
 
 try {
-    Env::load(__DIR__ . '/../.env');
-    
     $host = getenv('DB_HOST') ?: 'localhost';
     $port = getenv('DB_PORT') ?: '3306';
     $dbname = getenv('DB_NAME') ?: 'eventora';

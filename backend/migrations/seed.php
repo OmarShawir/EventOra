@@ -18,13 +18,10 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use App\Env;
 
-// Only load .env if Connection class or env is not loaded, or if running standalone
-if (!class_exists('App\Database\Connection')) {
-    Env::load(__DIR__ . '/../');
-}
-
-// Reuse existing $pdo connection if included from migrate.php, otherwise create new one
+// Reuse the existing $pdo connection when required from migrate.php;
+// otherwise load .env and connect standalone (php migrations/seed.php).
 if (!isset($pdo)) {
+    Env::load(__DIR__ . '/../.env');
     $pdo = \App\Database\Connection::get();
 }
 
