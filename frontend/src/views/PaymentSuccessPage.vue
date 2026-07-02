@@ -5,6 +5,7 @@ import { useTicketsStore } from "@/stores/tickets";
 import { useEventsStore } from "@/stores/events";
 import { CheckCircle2, Ticket, ArrowRight, Loader2 } from "lucide-vue-next";
 import QRCodeDisplay from "@/components/tickets/QRCodeDisplay.vue";
+import api from "@/api/axios";
 
 const route = useRoute();
 const router = useRouter();
@@ -12,6 +13,7 @@ const ticketsStore = useTicketsStore();
 const eventsStore = useEventsStore();
 
 const eventId = computed(() => route.query.event_id);
+const sessionId = computed(() => route.query.session_id);
 const event = ref(null);
 const ticket = ref(null);
 const loading = ref(true);
@@ -41,6 +43,16 @@ onMounted(async () => {
     event.value = eventsStore.getEventById(eventId.value);
   } catch (err) {
     console.error("Failed to load event:", err);
+  }
+
+  // Issue the ticket synchronously instead of waiting on the async Stripe
+  // webhook, which can be delayed or (if misconfigured) never arrive.
+  if (sessionId.value) {
+    try {
+      await api.get("/payment/verify-session", { params: { session_id: sessionId.value } });
+    } catch (err) {
+      console.warn("[payment-success] verify-session failed, falling back to webhook polling:", err.message);
+    }
   }
 
   // First check

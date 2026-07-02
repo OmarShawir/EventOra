@@ -135,32 +135,87 @@ class PaymentController
             $userId = isset($metadata->user_id) ? (int) $metadata->user_id : null;
 
             if ($eventId && $userId) {
-                $pdo = Connection::get();
-
-                // Prevent duplicates in case webhook fires multiple times
-                $existing = $pdo->prepare('SELECT id FROM tickets WHERE event_id = ? AND user_id = ?');
-                $existing->execute([$eventId, $userId]);
-                $ticketRow = $existing->fetch();
-                if (!$ticketRow) {
-                    $qrCode = $this->generateQrCode($eventId, $userId);
-                    $insert = $pdo->prepare(
-                        'INSERT INTO tickets (event_id, user_id, qr_code, status) VALUES (?, ?, ?, "confirmed")'
-                    );
-                    $insert->execute([$eventId, $userId, $qrCode]);
-                    $ticketId = (int) $pdo->lastInsertId();
-
-                    // Log the transaction in payments table
-                    $amount = (float) (($session->amount_total ?? 0) / 100);
-                    $stripeChargeId = $session->payment_intent ?? null;
-                    $payStmt = $pdo->prepare(
-                        'INSERT INTO payments (ticket_id, amount, currency, stripe_charge_id, status) VALUES (?, ?, "MYR", ?, "completed")'
-                    );
-                    $payStmt->execute([$ticketId, $amount, $stripeChargeId]);
-                }
+                $this->issueTicketForSession($eventId, $userId, $session);
             }
         }
 
         return JsonResponse::send($response, ['received' => true]);
+    }
+
+    /**
+     * GET /payment/verify-session
+     * Called by the frontend right after Stripe redirects back to the
+     * success page. Issues the ticket synchronously instead of waiting on
+     * the async webhook, which can be delayed (or, if the endpoint isn't
+     * registered in the Stripe dashboard, never arrive at all). The webhook
+     * remains the source of truth and stays idempotent alongside this.
+     */
+    public function verifySession(Request $request, Response $response): Response
+    {
+        $jwt = $request->getAttribute('jwt');
+        $userId = (int) $jwt['sub'];
+        $sessionId = $request->getQueryParams()['session_id'] ?? '';
+
+        if (!$sessionId) {
+            return JsonResponse::error($response, 'session_id is required.', 400);
+        }
+
+        $stripeSecret = getenv('STRIPE_SECRET_KEY') ?: $_ENV['STRIPE_SECRET_KEY'] ?? '';
+        if (!$stripeSecret || $stripeSecret === 'sk_test_placeholder') {
+            return JsonResponse::error($response, 'Stripe integration is not configured on the server.', 500);
+        }
+        Stripe::setApiKey($stripeSecret);
+
+        try {
+            $session = StripeSession::retrieve($sessionId);
+        } catch (\Exception $e) {
+            return JsonResponse::error($response, 'Could not verify payment session.', 502);
+        }
+
+        if ($session->payment_status !== 'paid') {
+            return JsonResponse::error($response, 'Payment not completed yet.', 402);
+        }
+
+        $metadata = $session->metadata;
+        $eventId = isset($metadata->event_id) ? (int) $metadata->event_id : null;
+        $sessionUserId = isset($metadata->user_id) ? (int) $metadata->user_id : null;
+
+        // The session must belong to the caller — stops one user from
+        // polling another user's session_id to read/create their ticket.
+        if (!$eventId || $sessionUserId !== $userId) {
+            return JsonResponse::error($response, 'Session does not match the current user.', 403);
+        }
+
+        $this->issueTicketForSession($eventId, $userId, $session);
+
+        return JsonResponse::send($response, ['verified' => true]);
+    }
+
+    /** Shared by the webhook and verifySession so both stay idempotent and in sync. */
+    private function issueTicketForSession(int $eventId, int $userId, $session): void
+    {
+        $pdo = Connection::get();
+
+        // Prevent duplicates in case the webhook and verifySession both fire
+        $existing = $pdo->prepare('SELECT id FROM tickets WHERE event_id = ? AND user_id = ?');
+        $existing->execute([$eventId, $userId]);
+        if ($existing->fetch()) {
+            return;
+        }
+
+        $qrCode = $this->generateQrCode($eventId, $userId);
+        $insert = $pdo->prepare(
+            'INSERT INTO tickets (event_id, user_id, qr_code, status) VALUES (?, ?, ?, "confirmed")'
+        );
+        $insert->execute([$eventId, $userId, $qrCode]);
+        $ticketId = (int) $pdo->lastInsertId();
+
+        $amount = (float) (($session->amount_total ?? 0) / 100);
+        $stripeChargeId = $session->payment_intent ?? null;
+        $payStmt = $pdo->prepare(
+            'INSERT INTO payments (ticket_id, amount, currency, stripe_charge_id, status) VALUES (?, ?, "MYR", ?, "completed")'
+        );
+        $payStmt->execute([$ticketId, $amount, $stripeChargeId]);
     }
 
     /**
