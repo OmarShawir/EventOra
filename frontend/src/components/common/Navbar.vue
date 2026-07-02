@@ -358,7 +358,7 @@ function toggleDarkMode() {
       </div>
 
       <!-- Mobile hamburger and theme toggle -->
-      <div class="md:hidden" style="display: flex; align-items: center; gap: 8px">
+      <div class="flex md:hidden" style="align-items: center; gap: 8px">
         <!-- Theme Toggle -->
         <button
           @click="toggleDarkMode"
