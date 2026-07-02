@@ -84,6 +84,7 @@ $app->group('', function ($group) {
     $group->get('/auth/me', [AuthController::class, 'me']);
     $group->post('/events/{id}/register', [TicketController::class, 'register']);
     $group->post('/events/{id}/checkout-session', [PaymentController::class, 'checkoutSession']);
+    $group->get('/payment/verify-session', [PaymentController::class, 'verifySession']);
     $group->post('/events/{id}/feedback', [FeedbackController::class, 'store']);
 })->add(new JwtAuthMiddleware());
 

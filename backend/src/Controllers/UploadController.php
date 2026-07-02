@@ -54,8 +54,18 @@ class UploadController
             return JsonResponse::error($response, 'Failed to save the uploaded image.', 500, ['debug' => $e->getMessage()]);
         }
 
-        // Return the public URL
-        $appUrl = rtrim(getenv('APP_URL') ?: 'http://localhost:8080', '/');
+        // Return the public URL. Prefer deriving it from the actual incoming
+        // request (host + X-Forwarded-Proto, since Railway terminates TLS at
+        // a proxy) so this is correct even if APP_URL was never set/updated
+        // in the deployment's environment variables. Falls back to APP_URL
+        // for local dev, where the request host is just "localhost".
+        $host = $request->getUri()->getHost();
+        if ($host && !in_array($host, ['localhost', '127.0.0.1'], true)) {
+            $scheme = $request->getHeaderLine('X-Forwarded-Proto') ?: $request->getUri()->getScheme();
+            $appUrl = $scheme . '://' . $host;
+        } else {
+            $appUrl = rtrim(getenv('APP_URL') ?: 'http://localhost:8080', '/');
+        }
         $imageUrl = $appUrl . '/uploads/' . $fullFilename;
 
         return JsonResponse::send($response, [
